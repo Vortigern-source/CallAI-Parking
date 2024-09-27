@@ -1,4 +1,4 @@
-# Twilio Chatbot
+# Twilio Chatbot - CallAI
 
 This project is a FastAPI-based chatbot that integrates with Twilio to handle WebSocket connections and provide real-time communication. The project includes endpoints for starting a call and handling WebSocket connections.
 
