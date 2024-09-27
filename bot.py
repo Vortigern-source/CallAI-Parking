@@ -1,39 +1,37 @@
 import os
 import sys
+from groq import Groq
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 import asyncio
 import aiohttp
 import pytz
-import re
-from urllib.parse import urlencode
-from datetime import datetime, timedelta
-import time
-import datetime
-from datetime import date, timedelta
-from pipecat.frames.frames import TextFrame, EndFrame, LLMMessagesFrame
+from pipecat.frames.frames import TextFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
+from pipecat.pipeline.task import PipelineTask
 from pipecat.pipeline.task import PipelineParams, PipelineTask
-from pipecat.processors.aggregators.llm_response import (
-    LLMAssistantResponseAggregator,
-    LLMUserResponseAggregator,
-)
 from pipecat.services.cartesia import CartesiaTTSService
-from pipecat.services.deepgram import DeepgramTTSService, DeepgramSTTService
+from pipecat.services.deepgram import DeepgramTTSService
 from pipecat.services.openai import OpenAILLMService, OpenAILLMContext
+from pipecat.services.deepgram import DeepgramSTTService
 from pipecat.transports.network.fastapi_websocket import (
     FastAPIWebsocketTransport,
     FastAPIWebsocketParams,
 )
+from datetime import datetime
+import pytz
 from pipecat.vad.silero import SileroVADAnalyzer
 from pipecat.serializers.twilio import TwilioFrameSerializer
-
 from openai.types.chat import ChatCompletionToolParam
-
 from loguru import logger
 from dotenv import load_dotenv
+import os
 from twilio.rest import Client
+from urllib.parse import urlencode
+import re
+from datetime import datetime, timedelta
+import pytz
 
 load_dotenv(override=True)
 logger.remove(0)
@@ -68,28 +66,6 @@ async def transfer_call(function_name, tool_call_id, arguments, llm, context, re
     except Exception as error:
         logger.error(f"Error transferring call: {str(error)}")
         await result_callback(json.dumps({"error": str(error)}))
-
-
-def get_current_time():
-    # Get the current time in UTC
-    utc_now = datetime.datetime.now(pytz.utc)
-
-    # Convert to UK time (assuming that's the relevant timezone for Manchester Airport)
-    uk_tz = pytz.timezone("Europe/London")
-    uk_time = utc_now.astimezone(uk_tz)
-
-    # Format the time as a string
-    formatted_time = uk_time.strftime("%I:%M %p")  # e.g., "02:30 PM"
-
-    return {"current_time": formatted_time, "timestamp": uk_time.isoformat()}
-
-
-# Example of how to use in your main code:
-async def handle_get_current_time(
-    function_name, tool_call_id, arguments, llm, context, result_callback
-):
-    current_time_info = get_current_time()
-    await result_callback(json.dumps(current_time_info))
 
 
 async def whatsapp_message(function_name, tool_call_id, arguments, llm, context, result_callback):
@@ -701,6 +677,12 @@ async def update_phone_number(
             )
 
 
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 async def find_booking(function_name, tool_call_id, arguments, llm, context, result_callback):
     registration = arguments.get("registration", "")
     is_arrival = arguments.get("is_arrival", False)
@@ -811,7 +793,7 @@ async def run_bot(websocket_client, stream_sid):
             llm = OpenAILLMService(
                 api_key=os.getenv("GROQ_API_KEY"),
                 base_url="https://api.groq.com/openai/v1",
-                model="llama-3.1-70b-versatile",
+                model="llama3-groq-70b-8192-tool-use-preview",
             )
             llm.register_function("find_booking", find_booking)
             llm.register_function("update_terminal", update_terminal)
@@ -821,22 +803,16 @@ async def run_bot(websocket_client, stream_sid):
             llm.register_function("whatsapp_message", whatsapp_message)
             llm.register_function("find_booking_by_phone", find_booking_by_phone)
             llm.register_function("update_eta", update_eta)
-            llm.register_function("get_current_time", handle_get_current_time)
 
             stt = DeepgramSTTService(api_key=os.getenv("DEEPGRAM_API_KEY"))
 
-            # tts = DeepgramTTSService(
-            #     aiohttp_session=session,
-            #     api_key=os.getenv("DEEPGRAM_API_KEY"),
-            #     voice="aura-helios-en",
-            #     encoding="linear16",  # or "mulaw" or "alaw" for streaming
-            #     sample_rate=16000,  # choose an appropriate sample rate
-            #     container="none",  # This is the key change
-            # )
-
-            tts = CartesiaTTSService(
-                api_key=os.getenv("CARTESIA_API_KEY"),
-                voice_id="79a125e8-cd45-4c13-8a67-188112f4dd22",  # British Lady
+            tts = DeepgramTTSService(
+                aiohttp_session=session,
+                api_key=os.getenv("DEEPGRAM_API_KEY"),
+                voice="aura-athena-en",
+                encoding="linear16",  # or "mulaw" or "alaw" for streaming
+                sample_rate=16000,  # choose an appropriate sample rate
+                container="none",  # This is the key change
             )
 
             tools = [
@@ -1020,112 +996,64 @@ async def run_bot(websocket_client, stream_sid):
                         },
                     },
                 ),
-                ChatCompletionToolParam(
-                    type="function",
-                    function={
-                        "name": "get_current_time",
-                        "description": "Get the current time in UK timezone",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {},  # This function doesn't require any parameters
-                            "required": [],
-                        },
-                    },
-                ),
             ]
 
             messages = [
                 {
                     "role": "system",
-                    "content": """You are Josh, an AI assistant for Manchester Airport Parking. Handle customer inquiries about parking reservations for car drop-offs and pick-ups efficiently and professionally.
-Main Objective
-Assist customers with Manchester Airport Parking reservations for car drop-offs and pick-ups.
-                    
-**IMPORTANT**
-- Be professional and helpful.
-- Always confirm registration before using in functions.
-- Format numbers for clear pronunciation.
-- If no booking found, ask for alternative registration or use find_booking_by_phone.
-- Never share raw function data.
-- Avoid special characters (for audio conversion).
-- Ask for clarification if unsure.
-- Don't assume booking details and what values to plug into functions.
-- Verify each detail before moving to the next.
-- Phone Numbers should be formatted with dashes to signal a pause, for example "0742 111 7301" should be "0742-111-7301".
+                    "content": """You are Joanne, a friendly AI assistant for Manchester Airport Parking. ALWAYS follow this conversation flow in order:
 
-*Tonality For Conversation: Professional and helpful*
+                                1. Ask: "Are you calling to drop off a car for us to park or have you landed and want us to send your car to the airport?"
+                                - Set is_arrival to false for drop-offs, true for pick-ups.
 
-*Rules of conversation*
-- Never repeat yourself.
-- Keep responses concise and under 500 characters.
-- Pronounce dates and times completely and slowly.
-- Don't disclose you're AI or imply you're human.
-- DO NOT REPEAT YOURSELF.
-- Do not repeat what you say unless the customer specifically asks you to.
+                                2. Get car registration:
+                                - Ask for the registration number.
+                                - Confirm by repeating with pauses: "V..E..68..V...E...P"
+                                - Use find_booking(registration, is_arrival) without punctuation.
 
-*Conversation Flow*
-    MUST DO: 
-    Step 1. Understand Call Purpose
-    Step 2. Get and confirm registration
-    Step 3. Find and confirm booking details, one by one
-    Step 4. Get/update ETA (for departures)
-    Step 5. Provide specific instructions
-    Step 6. Notify relevant staff (manager/driver)
-    Step 7. Conclude call
+                                3. If booking found, confirm one by one:
+                                - Name
+                                - Booking time
+                                - Terminal
+                                - Phone number (Format: "073.985.566.77")
 
-If they say it's a drop-off MUST DO:
-    Step 1. Ask for and confirm car registration number, repeating it back clearly.
-    Step 2. Use find_booking(registration, is_arrival=false). Say "Let me find your booking" before calling.
-    Step 3. Confirm details one by one: Name, booking time, terminal number, contact phone.
-    Step 4. Get precise ETA, suggesting navigation system use.
-    Step 5. Update ETA with update_eta function. Say "I'll update that for you" before calling.
-    Step 6. Use get_current_time() to get the current time. Say "Let me check the current time" before calling.
-    Step 7. Provide instructions for allocated car park and terminal.
-    Step 8. Use whatsapp_message(registration, is_arrival=false). Say "I'll notify our staff" before calling.
+                                4. For drop-offs:
+                                a. Ask arrival time at the terminal.
+                                b. Use update_eta(registration, customer_eta, is_arrival).
+                                c. Confirm update, give instructions, use whatsapp_message(registration, is_arrival), inform customer of notification.
 
-If they say it's a pick-up MUST DO:
-    Step 1. Confirm luggage collection. If not collected, advise to call back later.
-    Step 2. Ask for and confirm car registration number.
-    Step 3. Use find_booking(registration, is_arrival=true). Say "I'll look up your booking" before calling.
-    Step 4. Confirm all booking details one by one, Name, booking time, terminal number, contact phone.
-    Step 5. Provide pickup location and estimated wait time.
-    Step 6. Use whatsapp_message(registration, is_arrival=true). Say "I'll let our driver know you're ready" before calling.
+                                5. Conclude: "Anything else about your booking?"
 
-If they say transfer MUST DO:
-Use transfer_call(call_sid). Say "I'll transfer you to a human agent who can assist you further" before calling.
+                                CRITICAL:
+                                - NEVER skip ETA update for drop-offs.
+                                - Use periods in numbers: "A..B..12..C..D"
+                                - Complete all steps before offering more help.
+                                - If information given out of order, acknowledge but stick to the flow.
+                                - Be concise and professional.
+                                - For booking issues, use find_booking_by_phone(phone_number, is_arrival).
+                                - For other issues, use transfer_call(call_sid).
 
-*Function Usage*
-- find_booking(registration, is_arrival)
-- update_terminal(registration, terminal, is_arrival)
-- update_registration(old_registration, new_registration, is_arrival)
-- update_phone_number(registration, phone_number, is_arrival)
-- transfer_call(call_sid)
-- whatsapp_message(registration, is_arrival)
-- find_booking_by_phone(phone_number, is_arrival)
-- update_eta(registration, customer_eta, is_arrival)
-- get_current_time()
-
-When using these functions:
-- Always use the exact function names as listed above.
-- Ensure all required parameters are included.
-- Don't proceed until each function call is complete.
-- Do not guess as to what to put into the functions, ask for clarification if needed.
-""",
+                                FUNCTIONS:
+                                - find_booking(registration, is_arrival)
+                                - update_eta(registration, customer_eta, is_arrival)
+                                - whatsapp_message(registration, is_arrival)
+                                - find_booking_by_phone(phone_number, is_arrival)
+                                - transfer_call(call_sid)""",
                 }
             ]
 
-            tma_in = LLMUserResponseAggregator(messages)
-            tma_out = LLMAssistantResponseAggregator(messages)
+            context = OpenAILLMContext(messages, tools)
+            context_aggregator = llm.create_context_aggregator(context)
 
             pipeline = Pipeline(
                 [
                     transport.input(),  # Websocket input from client
                     stt,  # Speech-To-Text
-                    tma_in,  # User responses
+                    context_aggregator.user(),
                     llm,  # LLM
                     tts,  # Text-To-Speech
                     transport.output(),  # Websocket output to client
-                    tma_out,  # LLM responses
+                    context_aggregator.assistant(),
                 ]
             )
 
@@ -1135,7 +1063,7 @@ When using these functions:
             async def on_client_connected(transport, client):
                 # Kick off the conversation.
                 await tts.say(
-                    "Hello! Welcome to Manchester Airport Parking. Are you calling to drop off a car for us to park or have you landed and want us to bring your car to the airport for collection??"
+                    "Hello! Welcome to Manchester Airport Parking. How may I assist you with your parking reservation today?"
                 )
 
             @transport.event_handler("on_client_disconnected")
