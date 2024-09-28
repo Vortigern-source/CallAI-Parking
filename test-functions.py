@@ -78,7 +78,7 @@ async def test_find_booking():
     await find_booking(
         "find_booking",
         "test_id",
-        {"registration": "RJ23BMO", "is_arrival": False},
+        {"registration": "BN61DVV", "is_arrival": "False"},
         mock_llm,
         mock_context,
         result_callback,
