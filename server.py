@@ -7,7 +7,16 @@ from starlette.responses import HTMLResponse
 
 from bot import run_bot
 
+
 app = FastAPI()
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+# Existing endpoints and bot logic
 
 app.add_middleware(
     CORSMiddleware,

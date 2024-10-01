@@ -1,7 +1,11 @@
-pipecat-ai[daily,cartesia,openai,silero,deepgram]
 fastapi
 uvicorn
+aiohttp
+pytz
 python-dotenv
-loguru
-pyairtable
 twilio
+requests
+loguru
+
+# Unreleased pipecat-ai with extras using PEP 508 syntax
+pipecat-ai[daily,cartesia,openai,silero,deepgram] @ git+https://github.com/pipecat-ai/pipecat.git@main

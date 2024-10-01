@@ -10002,3 +10002,6 @@ __pycache__/bot.cpython-310.pyc
 __pycache__/bot.cpython-312.pyc
 .env
 /src
+*.pth
+/venv
+/venv

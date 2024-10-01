@@ -1,0 +1,41 @@
+# Ignore Git repository
+.git
+.gitignore
+
+# Ignore Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore virtual environments
+venv/
+env/
+.venv/
+
+# Ignore logs and databases
+*.log
+*.sqlite3
+
+# Ignore IDE/editor config files
+.vscode/
+.idea/
+
+# Ignore other unnecessary files or directories
+node_modules/
+build/
+dist/
+coverage/
+*.egg-info/
+
+# Ignore data or media files not needed in the build
+data/
+media/
+uploads/
+
+# Ignore Docker-related files
+Dockerfile
+docker-compose.yml
+
+# Ignore Fly.io specific files
+fly.toml

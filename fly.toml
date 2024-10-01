@@ -1,0 +1,54 @@
+# fly.toml app configuration file generated for callgpt-parking on 2024-10-01T13:09:39+01:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'callgpt-parking'
+primary_region = 'iad'
+
+[experimental]
+  auto_rollback = true
+
+[build]
+
+[env]
+  FLY_APP_NAME = 'callgpt-parking'
+
+[http_service]
+  internal_port = 8765
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[services]]
+  protocol = 'tcp'
+  internal_port = 8765
+
+  [[services.ports]]
+    port = 80
+    handlers = ['http']
+
+  [[services.ports]]
+    port = 443
+    handlers = ['http', 'tls']
+
+  [services.concurrency]
+    type = 'connections'
+    hard_limit = 25
+    soft_limit = 20
+
+  [[services.tcp_checks]]
+    interval = '10s'
+    timeout = '2s'
+    grace_period = '30s'
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+[[metrics]]
+  port = 9090
+  path = '/metrics'
