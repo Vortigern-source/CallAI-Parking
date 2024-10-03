@@ -10005,3 +10005,4 @@ __pycache__/bot.cpython-312.pyc
 *.pth
 /venv
 /venv
+.env copy
