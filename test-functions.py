@@ -73,16 +73,16 @@ async def result_callback(result):
 #     )
 
 
-async def test_find_booking():
-    print("\nTesting find_booking function:")
-    await find_booking(
-        "find_booking",
-        "test_id",
-        {"registration": "BN61DVV", "is_arrival": "False"},
-        mock_llm,
-        mock_context,
-        result_callback,
-    )
+# async def test_find_booking():
+#     print("\nTesting find_booking function:")
+#     await find_booking(
+#         "find_booking",
+#         "test_id",
+#         {"registration": "BN61DVV", "is_arrival": "False"},
+#         mock_llm,
+#         mock_context,
+#         result_callback,
+#     )
 
 
 # async def test_transfer_call():
@@ -97,16 +97,16 @@ async def test_find_booking():
 #     )
 
 
-# async def test_whatsapp_message():
-#     print("\nTesting whatsapp_message function:")
-#     await whatsapp_message(
-#         "whatsapp_message",
-#         "test_id",
-#         {"registration": "BB57CHN", "is_arrival": False},
-#         mock_llm,
-#         mock_context,
-#         result_callback,
-#     )
+async def test_whatsapp_message():
+    print("\nTesting whatsapp_message function:")
+    await whatsapp_message(
+        "whatsapp_message",
+        "test_id",
+        {"registration": "YA19KXT", "is_arrival": False},
+        mock_llm,
+        mock_context,
+        result_callback,
+    )
 
 
 # async def test_find_booking_by_phone():
@@ -150,9 +150,9 @@ async def run_tests():
     # await test_update_terminal()
     # await test_update_registration()
     # await test_update_phone_number()
-    await test_find_booking()
+    # await test_find_booking()
     # await test_transfer_call()
-    # await test_whatsapp_message()
+    await test_whatsapp_message()
     # await test_find_booking_by_phone()
     # await test_update_eta()
     # await test_get_current_time()
