@@ -6,7 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
 
 from bot import run_bot
+import os
+from twilio.rest import Client
 
+# Set up Twilio client
+twilio_client = Client(os.environ["TWILIO_ACCOUNT_SID"], os.environ["TWILIO_AUTH_TOKEN"])
 
 app = FastAPI()
 

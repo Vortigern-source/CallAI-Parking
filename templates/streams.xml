@@ -3,5 +3,5 @@
   <Connect>
     <Stream url="wss://callgpt-parking.fly.dev/ws"></Stream>
   </Connect>
-  <Pause length="40"/>
+  <Pause length="20"/>
 </Response>

@@ -7,5 +7,3 @@ python-dotenv
 twilio
 requests
 loguru
-
-# Unreleased pipecat-ai with extras using PEP 508 syntax
