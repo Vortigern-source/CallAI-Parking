@@ -7,3 +7,5 @@ python-dotenv
 twilio
 requests
 loguru
+
+# git+https://github.com/KwalAI/kwal-pipecat.git@noisereduce#egg=pipecat-ai[noisereduce]

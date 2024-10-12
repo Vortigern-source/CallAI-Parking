@@ -8,9 +8,8 @@ from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKIN
 
 async def find_booking(function_name, tool_call_id, arguments, llm, context, result_callback):
     registration = arguments.get("registration", "")
-    is_arrival = arguments.get("is_arrival", False)
 
-    logger.debug(f"Raw input - registration: {registration}, isArrival: {is_arrival}")
+    logger.debug(f"Raw input - registration: {registration}")
 
     # Remove any non-alphanumeric characters and convert to uppercase
     formatted_registration = "".join(char for char in registration if char.isalnum()).upper()
