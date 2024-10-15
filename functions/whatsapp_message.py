@@ -28,27 +28,33 @@ async def whatsapp_message(function_name, tool_call_id, arguments, llm, context,
         f"cellFormat=string&timeZone=Europe/London&userLocale=en-gb"
     )
 
+    headers = {"Authorization": f"Bearer {AIRTABLE_API_KEY}"}
+
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.get(
-                airtable_url, headers={"Authorization": f"Bearer {AIRTABLE_API_KEY}"}
-            ) as response:
+            async with session.get(airtable_url, headers=headers) as response:
                 airtable_data = await response.json()
 
             if airtable_data["records"]:
                 record = airtable_data["records"][0]["fields"]
 
+                booking_ref = record.get("Booking_Ref", "N/A")
                 vehicle_make = record.get("Vehicle_Make", "N/A")
                 name = record.get("Name", "N/A")
                 contact_number = record.get("Contact_Number", "N/A")
                 entry_date_time = record.get("Entry_Date_Time", "N/A")
                 terminal = record.get("Terminal", "N/A")
                 estimated_eta = record.get("Current_ETA", "N/A")
+                allocated_car_park = record.get("Allocated_Car_Park", "N/A")
+                old_terminal = record.get("Old_Terminal", "N/A")
+                old_registration = record.get("Old_Registration", "N/A")
+                old_phone_number = record.get("Old_Phone_Number", "N/A")
 
-                booking_type = "Arrival (Pick-up)" if is_arrival else "(Drop-off)"
+                booking_type = "Arrival (Pick-up)" if is_arrival else "Departure (Drop-off)"
 
                 message = f"""
 New {booking_type} Booking Requires Driver Assignment:
+- Booking Reference: {booking_ref}
 - Vehicle: {vehicle_make}
 - Registration: {registration}
 - Customer Name: {name}
@@ -56,6 +62,12 @@ New {booking_type} Booking Requires Driver Assignment:
 - {"Arrival" if is_arrival else "Entry"} Date/Time: {entry_date_time}
 - Estimated {"Landing Time" if is_arrival else "ETA"}: {estimated_eta}
 - Terminal: {terminal}
+- Allocated Car Park: {allocated_car_park}
+
+Changes (if any):
+- Old Terminal: {old_terminal if old_terminal and old_terminal != terminal else "No change"}
+- Old Registration: {old_registration if old_registration and old_registration != registration else "No change"}
+- Old Phone Number: {old_phone_number if old_phone_number and old_phone_number != contact_number else "No change"}
 
 Please assign a driver for this {"pick-up" if is_arrival else "drop-off"}.
 """
@@ -108,6 +120,11 @@ Please assign a driver for this {"pick-up" if is_arrival else "drop-off"}.
                     await result_callback(
                         json.dumps({"error": f"Failed to send WhatsApp message: {error_message}"})
                     )
+            else:
+                logger.warning(f"No booking found for registration: {formatted_registration}")
+                await result_callback(
+                    json.dumps({"error": "No booking found for this registration number."})
+                )
         except Exception as error:
             logger.error(f"Error in whatsappMessage function: {str(error)}")
             await result_callback(

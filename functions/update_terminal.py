@@ -5,6 +5,8 @@ from loguru import logger
 import aiohttp
 from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
 
+from .whatsapp_message import whatsapp_message
+
 
 async def update_terminal(function_name, tool_call_id, arguments, llm, context, result_callback):
     registration = arguments.get("registration")
@@ -71,6 +73,16 @@ async def update_terminal(function_name, tool_call_id, arguments, llm, context, 
                                         "updatedTerminal": terminal,
                                     }
                                 )
+                            )
+
+                            # Call whatsapp_message function to notify about the terminal update
+                            await whatsapp_message(
+                                "whatsapp_message",
+                                tool_call_id,
+                                {"registration": formatted_registration, "is_arrival": False},
+                                llm,
+                                context,
+                                result_callback,
                             )
                         else:
                             error_text = await patch_response.text()
