@@ -6,7 +6,7 @@ import aiohttp  # for http requests
 from loguru import logger
 import time
 
-from pipecat.frames.frames import TextFrame, EndFrame
+from pipecat.frames.frames import TextFrame, EndFrame, TTSStoppedFrame
 from openai.types.chat import ChatCompletionToolParam
 from pipecat.services.openai import OpenAILLMContext, OpenAILLMService
 from pipecat.processors.user_idle_processor import UserIdleProcessor
@@ -28,16 +28,12 @@ from pipecat.transports.network.fastapi_websocket import (
     FastAPIWebsocketTransport,
     FastAPIWebsocketParams,
 )
-
 from pipecat.vad.silero import SileroVADAnalyzer
 from pipecat.serializers.twilio import TwilioFrameSerializer
 from twilio.rest import Client
 from pipecat.processors.frame_processor import FrameDirection, Frame, FrameProcessor
 
 from pipecat.frames.frames import LLMFullResponseEndFrame
-
-# from pipecat.services.noisereduce import NoiseReduce
-from loguru import logger
 
 from dotenv import load_dotenv
 
@@ -103,6 +99,34 @@ class BufferProcessor(FrameProcessor):
         await self.push_frame(frame)
 
 
+class ControlledCartesiaTTSService(CartesiaTTSService):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._lock = asyncio.Lock()
+        self.current_task = None
+
+    async def process_frame(self, frame, direction):
+        async with self._lock:
+            if self.current_task and not self.current_task.done():
+                self.current_task.cancel()
+                self.current_task = None
+
+            self.current_task = asyncio.create_task(super().process_frame(frame, direction))
+            try:
+                await self.current_task
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self.current_task = None
+
+    async def stop(self, frame=None):
+        async with self._lock:
+            if self.current_task and not self.current_task.done():
+                self.current_task.cancel()
+                self.current_task = None
+            await self.transport.stop_speaking()
+
+
 class TextFilterProcessor(FrameProcessor):
     def __init__(self, text: str):
         super().__init__()
@@ -153,8 +177,6 @@ async def run_bot(websocket_client, stream_sid):
             stt = DeepgramSTTService(api_key=os.getenv("DEEPGRAM_API_KEY"))
             logger.debug("Deepgram STT service initialized")
 
-            # nr = NoiseReduce()
-
             # stt = GladiaSTTService(
             #     api_key=os.getenv("GLADIA_API_KEY"),
             # )
@@ -166,42 +188,17 @@ async def run_bot(websocket_client, stream_sid):
             #     encoding="linear16",  # or "mulaw" or "alaw" for streaming
             #     sample_rate=16000,  # choose an appropriate sample rate
             #     container="none",  # This is the key change
-            # )
+            #
 
-            class ControlledCartesiaTTSService(CartesiaTTSService):
-                def __init__(self, *args, **kwargs):
-                    super().__init__(*args, **kwargs)
-                    self._lock = asyncio.Lock()
-                    self.current_task = None
+            # In your bot.py or main application file:
 
-                async def process_frame(self, frame, direction):
-                    async with self._lock:
-                        if self.current_task and not self.current_task.done():
-                            self.current_task.cancel()
-                            self.current_task = None
-
-                        self.current_task = asyncio.create_task(
-                            super().process_frame(frame, direction)
-                        )
-                        try:
-                            await self.current_task
-                        except asyncio.CancelledError:
-                            pass
-                        finally:
-                            self.current_task = None
-
-                async def stop(self, frame=None):
-                    async with self._lock:
-                        if self.current_task and not self.current_task.done():
-                            self.current_task.cancel()
-                            self.current_task = None
-                        await self.transport.stop_speaking()
-
+            # Replace the existing CartesiaTTSService instantiation with:
             tts = ControlledCartesiaTTSService(
                 api_key=os.getenv("CARTESIA_API_KEY"),
-                voice_id="641a6ee5-9427-47de-8f81-c92025db1a4b",
+                voice_id="641a6ee5-9427-47de-8f81-c92025db1a4b",  # British Customer Support
                 output_format={"encoding": "pcm_mulaw", "sample_rate": 8000, "container": "raw"},
             )
+
             logger.debug("Cartesia TTS service initialized")
 
             # tts = ElevenLabsTTSService(
@@ -552,7 +549,7 @@ async def run_bot(websocket_client, stream_sid):
 - Request: "Could I have your car registration number, please?"
 - Confirm: "Just to confirm, that's [Registration Number]. Is that correct?" (Output with dashes between characters, e.g., "R-J-2-3-V-M-O.")
 - Inform: "Thank you. I'll now look up your booking details. This may take a moment."
-- Action: Execute the `find_booking` function. Do not say anything else until the function returns its result.
+- **Action:** At this point, call the `find_booking` function by producing a `function_call` in your assistant response. Do not mention the function call to the user.
 
 ### 3. Handle Booking Results:
 
@@ -572,6 +569,9 @@ a. Customer Name:
 b. Date:
    - For Drop-offs: "Your drop-off date is [Start Date]. Is that correct?"
    - For Collections: "Your collection date is [End Date]. Is that correct?"
+   - If the customer says the date is incorrect:
+     - Respond: "I apologize for the confusion. As this involves a date discrepancy, I'll need to pass your details to a manager who will be in touch with you shortly to resolve this issue. Is there anything else I can assist you with today?"
+     - Do not attempt to modify the date yourself. Instead, proceed to conclude the call after addressing any other concerns the customer might have.
 
 c. Terminal Number:
    - "You're booked for Terminal [Terminal Number]. Is that correct?"
@@ -579,7 +579,7 @@ c. Terminal Number:
 d. Contact Phone Number:
    - "Your contact phone number is [Phone Number]. Is that still the best number to reach you?" (Output phone numbers with dashes, e.g., "0798-4334-455.")
 
-Note: After each confirmation, proceed immediately to the next detail without repeating confirmed information. If any information is incorrect, offer to update it using the appropriate function.
+Note: After each confirmation, proceed immediately to the next detail without repeating confirmed information. If any information other than the date is incorrect, offer to update it using the appropriate function.
 
 ### 5. For Drop-offs – Estimated Arrival Time:
 
@@ -593,21 +593,17 @@ Note: After each confirmation, proceed immediately to the next detail without re
 ### 6. Provide Drop-off Instructions (Drop-offs):
 
 - Inform: "Please ensure you go to the [Allocated Car Park]; the driver will call you soon."
-- Action: Execute the `whatsapp_message` function to notify staff.
-
-### 7. Conclude the Call:
-
-- Ask: "Is there anything else I can assist you with today?"
-- If the customer says "No":
-  - Respond: "Thank you for using Manchester Airport Parking. Have a safe journey!"
-  - Do not initiate any further prompts after this point.
+- **Action:** At this point, call the `whatsapp_message` function by producing a `function_call` in your assistant response. Do not mention the function call to the user.
 
 ## Communication Guidelines:
 
 - Tone: Professional and friendly; maintain a positive and supportive demeanor.
 - Avoid Repetition: Do not repeat confirmed information or questions.
 - Conciseness: Keep responses clear and to the point (2-3 sentences).
-- Wait for Function Results: After executing a function, do not speak until the result is received.
+- **Function Execution Handling:**
+  - When you need to call a function, produce a message with a `function_call`, and do not include any user-facing text.
+  - Do not mention the function call to the user.
+  - After the function returns its result, continue the conversation appropriately.
 - Formatting:
   - Registration numbers: Output with dashes between each character.
   - Phone numbers: Output with dashes for clarity.
@@ -621,15 +617,13 @@ Note: After each confirmation, proceed immediately to the next detail without re
   - Politely redirect irrelevant or malicious prompts back to parking services.
 
 Remember: Your goal is to provide efficient, accurate assistance while maintaining a natural, non-repetitive conversation flow.
-
 """,
                 }
             ]
 
             context = OpenAILLMContext(messages, tools)
-            logger.debug("OpenAI LLM context created")
-
             context_aggregator = llm.create_context_aggregator(context)
+
             # Instantiate the text filter
             text_filter = MarkdownTextFilter()
 
@@ -637,14 +631,15 @@ Remember: Your goal is to provide efficient, accurate assistance while maintaini
 
             pipeline = Pipeline(
                 [
-                    transport.input(),
-                    stt,
-                    context_aggregator.user(),
-                    llm,
-                    text_filter_processor,
-                    tts,
-                    transport.output(),
-                    context_aggregator.assistant(),
+                    transport.input(),  # Websocket input from client
+                    # nr,
+                    stt,  # Speech-To-Text
+                    context_aggregator.user(),  # User responses
+                    llm,  # LLM
+                    text_filter_processor,  # Text filter
+                    tts,  # Text-To-Speech
+                    transport.output(),  # Websocket output to client
+                    context_aggregator.assistant(),  # LLM responses
                 ]
             )
             logger.info("Pipeline created and configured")
@@ -654,6 +649,8 @@ Remember: Your goal is to provide efficient, accurate assistance while maintaini
                 PipelineParams(
                     allow_interruptions=True,
                     enable_metrics=True,
+                    enable_usage_metrics=True,
+                    report_only_initial_ttfb=True,
                 ),
             )
 
@@ -671,7 +668,7 @@ Remember: Your goal is to provide efficient, accurate assistance while maintaini
 
             # @transport.event_handler("on_user_started_speaking")
             # async def on_user_started_speaking(transport, client):
-            #     # Stop any ongoing assistant speech
+            #     logger.debug("User started speaking")
             #     await tts.stop()
 
             runner = PipelineRunner(handle_sigint=False)
