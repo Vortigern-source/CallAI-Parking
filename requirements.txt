@@ -1,4 +1,4 @@
-pipecat-ai[daily,cartesia,openai,silero,deepgram]
+git+https://github.com/pipecat-ai/pipecat.git#egg=pipecat-ai[daily,cartesia,openai,silero,deepgram]
 fastapi
 uvicorn
 aiohttp
@@ -9,3 +9,4 @@ requests
 loguru
 
 # git+https://github.com/KwalAI/kwal-pipecat.git@noisereduce#egg=pipecat-ai[noisereduce]
+# git+https://github.com/pipecat-ai/pipecat.git#egg=pipecat-ai[daily,cartesia,openai,silero,deepgram]
