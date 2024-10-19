@@ -1,26 +1,26 @@
+# Standard
 import json
-from loguru import logger
+import os
+from dotenv import load_dotenv
 import uvicorn
-from fastapi import FastAPI, WebSocket
+import requests
+from requests.auth import HTTPBasicAuth
+from fastapi import FastAPI, WebSocket, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
+from loguru import logger
 
+# Twilio
+from twilio.twiml.voice_response import VoiceResponse
+
+# Internal
 from bot import run_bot
-import os
-from twilio.rest import Client
+from custom_pipecat.twilio_utils.twilio_recordings import start_recording
+from twilio.rest import Client as TwilioClient
 
-# Set up Twilio client
-twilio_client = Client(os.environ["TWILIO_ACCOUNT_SID"], os.environ["TWILIO_AUTH_TOKEN"])
 
+load_dotenv()
 app = FastAPI()
-
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-
-# Existing endpoints and bot logic
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,25 +32,50 @@ app.add_middleware(
 
 
 @app.post("/start_call")
-async def start_call():
-    print("POST TwiML")
-    return HTMLResponse(content=open("templates/streams.xml").read(), media_type="application/xml")
+def announce_recording():
+    # Create a TwiML response
+    resp = VoiceResponse()
+    logger.info(f"Resp: {resp}")
+    # Have the bot say something
+    resp.say(
+        "This call may be recorded for quality assurance purposes.",
+        voice="Polly.En-US-Neural-A",
+        language="en-US",
+    )
+    # Redirect to another URL to start the call and the recording
+    resp.redirect("/start_call")
+    # return Response(content=str(resp), media_type="application/xml")
+    return HTMLResponse(
+        content=open("custom_pipecat/templates/streams.xml").read(), media_type="application/xml"
+    )
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    # Accept websocket connection and get call data
     await websocket.accept()
     start_data = websocket.iter_text()
     await start_data.__anext__()
     call_data = json.loads(await start_data.__anext__())
-    print(call_data, flush=True)
-    stream_sid = call_data["start"]["streamSid"]
-    print("WebSocket connection accepted")
-    try:
-        await run_bot(websocket, stream_sid)
-    except Exception as e:
-        logger.error(f"Error running bot: {str(e)}")
-        await websocket.close()
+    logger.info(f"Start data: {start_data}")
+    logger.info(call_data)
+    logger.info("WebSocket connection accepted")
+
+    # Extract the Call SID and Stream SID from the Twilio start event data
+    stream_sid, call_sid = call_data["start"]["streamSid"], call_data["start"]["callSid"]
+
+    # Start recording
+    account_sid, auth_token = (
+        os.environ.get("TWILIO_ACCOUNT_SID_US"),
+        os.environ.get("TWILIO_AUTH_TOKEN_US"),
+    )
+    logger.info(f"Account SID: {account_sid}")
+    twilio_client = TwilioClient(
+        account_sid, auth_token, None, None
+    )  # Hardcoded, will not work if calling a Twilio phone number routed through another route
+    await start_recording(call_sid, twilio_client)
+    call_info = twilio_client.calls(call_sid).fetch()
+    await run_bot(websocket, stream_sid, call_sid, call_info)
 
 
 if __name__ == "__main__":

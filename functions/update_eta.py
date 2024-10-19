@@ -42,11 +42,13 @@ async def update_eta(function_name, tool_call_id, arguments, llm, context, resul
 
     timezone = pytz.timezone("Europe/London")
     current_time = datetime.now(timezone)
-    logger.debug(
-        f"Updating ETA for registration: {registration}, customerETA: {customer_eta}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
-    )
 
-    formatted_registration = registration.replace(" ", "").upper()
+    # Format the registration number
+    formatted_registration = "".join(char for char in registration if char.isalnum()).upper()
+
+    logger.debug(
+        f"Updating ETA for registration: {formatted_registration}, customerETA: {customer_eta}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
 
     url = (
         f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}?"

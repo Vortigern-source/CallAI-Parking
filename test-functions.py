@@ -127,7 +127,7 @@ async def test_update_eta():
     await update_eta(
         "update_eta",
         "test_id",
-        {"registration": "XY34ZZZ", "customer_eta": "30 minutes"},
+        {"registration": "H-N-16-Y-L-M", "customer_eta": "20 minutes"},
         mock_llm,
         mock_context,
         result_callback,
@@ -164,10 +164,10 @@ async def run_tests():
     # await test_update_registration()
     # await test_update_phone_number()
     # await test_find_booking()
-    # # await test_transfer_call()
+    # await test_transfer_call()
     # await test_whatsapp_message()
-    await test_find_booking_by_phone()
-    # await test_update_eta()
+    # await test_find_booking_by_phone()
+    await test_update_eta()
     # await test_get_current_time()
     # await test_get_current_date()
 
