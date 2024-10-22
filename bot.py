@@ -102,73 +102,15 @@ from functions import (
     update_eta,
     handle_get_current_time,
     handle_get_current_date,
-    whatsapp_message_extension,
     update_vehicle_details,
 )
 
+from functions.whatsapp_message import whatsapp_message_extension
 
-class ResponseBuffer:
-    def __init__(self):
-        self.buffer = []
+# Define custom interruption processor
+from custom_pipecat.custom_processors.interruption_processor import InterruptionFrameProcessor
 
-    def add(self, text):
-        self.buffer.append(text)
-
-    def get_and_clear(self):
-        full_response = " ".join(self.buffer)
-        self.buffer.clear()
-        return full_response
-
-
-class BufferProcessor(FrameProcessor):
-    def __init__(self, buffer):
-        super().__init__()
-        self.buffer = buffer
-
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
-        if isinstance(frame, TextFrame):
-            self.buffer.add(frame.text)
-        await self.push_frame(frame)
-
-
-# Custom TTS service with controlled processing
-class ControlledCartesiaTTSService(CartesiaTTSService):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._lock = asyncio.Lock()
-        self.current_task = None
-        self.queue = asyncio.Queue()
-        self.processing_task = None
-
-    async def process_frame(self, frame, direction):
-        await self.queue.put((frame, direction))
-        if self.processing_task is None or self.processing_task.done():
-            self.processing_task = asyncio.create_task(self._process_queue())
-
-    async def _process_queue(self):
-        while not self.queue.empty():
-            frame, direction = await self.queue.get()
-            async with self._lock:
-                if self.current_task and not self.current_task.done():
-                    self.current_task.cancel()
-                    await asyncio.sleep(0.1)  # Give some time for the previous task to cancel
-
-                self.current_task = asyncio.create_task(super().process_frame(frame, direction))
-                try:
-                    await self.current_task
-                except asyncio.CancelledError:
-                    pass
-                finally:
-                    self.current_task = None
-            self.queue.task_done()
-
-    async def stop(self, frame=None):
-        async with self._lock:
-            if self.current_task and not self.current_task.done():
-                self.current_task.cancel()
-                self.current_task = None
-            await self.queue.join()  # Wait for all queued items to be processed
-            await self.transport.stop_speaking()
+interruption_frame_processor = InterruptionFrameProcessor()
 
 
 # Main function to run the bot
@@ -242,11 +184,11 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             # )
 
             # Initialize Cartesia TTS service
-            tts = ControlledCartesiaTTSService(
+            tts = CartesiaTTSService(
                 api_key=os.getenv("CARTESIA_API_KEY"),
                 voice_id="79a125e8-cd45-4c13-8a67-188112f4dd22",
                 output_format={"encoding": "pcm_mulaw", "sample_rate": 8000, "container": "raw"},
-                # params=CartesiaTTSService.InputParams(emotion=["positivity:high"]),
+                transport=transport,
             )
 
             # tts = PlayHTTTSService(
@@ -489,15 +431,15 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                 [
                     transport.input(),  # Websocket input from client
                     stt,  # Speech-To-Text
-                    # debugging_frame_processor,
+                    interruption_frame_processor,
                     context_aggregator.user(),  # User responses
                     llm,  # LLM
                     tts,  # Text-To-Speech
                     # sts,
                     transport.output(),  # Websocket output to client
-                    # bot_buffer_processor,  # Add this line
+                    bot_buffer_processor,  # Add this line
                     context_aggregator.assistant(),  # LLM responses
-                    # transcript_capture_processor,  # Add this line
+                    transcript_capture_processor,  # Add this line
                 ]
             )
 

@@ -1,3 +1,4 @@
+templates/streams.xml
 __pycache__/bot_runner.cpython-312.pyc
 __pycache__/bot.cpython-310.pyc
 __pycache__/bot.cpython-312.pyc
@@ -10006,3 +10007,13 @@ __pycache__/bot.cpython-312.pyc
 /venv
 /venv
 .env copy
+/__pycache__
+*.pyc
+*.pyc
+*.pyc
+*.log
+*.log
+bot_2024-10-15_12-51-00_994821.log
+*.log
+*.pyc
+*.txt

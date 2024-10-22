@@ -75,11 +75,16 @@ async def update_terminal(function_name, tool_call_id, arguments, llm, context, 
                                 )
                             )
 
-                            # Call whatsapp_message function to notify about the terminal update
+                            # Update this part
                             await whatsapp_message(
                                 "whatsapp_message",
                                 tool_call_id,
-                                {"registration": formatted_registration, "is_arrival": False},
+                                {
+                                    "registration": formatted_registration,
+                                    "isDropOff": context.get(
+                                        "is_drop_off", True
+                                    ),  # Use the context to determine if it's a drop-off
+                                },
                                 llm,
                                 context,
                                 result_callback,

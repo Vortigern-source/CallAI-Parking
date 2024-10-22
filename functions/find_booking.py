@@ -1,9 +1,15 @@
 import json
 import pytz
-from datetime import datetime
+from datetime import datetime, timedelta
 from loguru import logger
 import aiohttp
 from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
+from .whatsapp_message import whatsapp_message_extension
+
+
+def convert_to_12hour(time_str):
+    time_obj = datetime.strptime(time_str, "%H:%M")
+    return time_obj.strftime("%I:%M %p")
 
 
 async def find_booking(function_name, tool_call_id, arguments, llm, context, result_callback):
@@ -11,7 +17,6 @@ async def find_booking(function_name, tool_call_id, arguments, llm, context, res
 
     logger.debug(f"Raw input - registration: {registration}")
 
-    # Remove any non-alphanumeric characters and convert to uppercase
     formatted_registration = "".join(char for char in registration if char.isalnum()).upper()
 
     logger.debug(f"Formatted registration: {formatted_registration}")
@@ -33,40 +38,50 @@ async def find_booking(function_name, tool_call_id, arguments, llm, context, res
                     data = await response.json()
                     if data["records"]:
                         record = data["records"][0]["fields"]
-
                         try:
-                            booking_time = datetime.strptime(
+                            start_date = datetime.strptime(
                                 record["Entry_Date_Time"], "%d/%m/%Y %H:%M"
                             )
-                            booking_time = pytz.timezone("Europe/London").localize(booking_time)
-                            formatted_booking_time = booking_time.strftime("%B %d at %I:%M %p")
-                        except ValueError:
-                            logger.error(f"Error parsing booking time: {record['Entry_Date_Time']}")
-                            formatted_booking_time = "Date format error"
-                        contact_number = record.get("Contact_Number", "Not provided")
-                        if contact_number != "Not provided":
-                            contact_number = " ".join(
-                                [
-                                    contact_number[i : i + 4]
-                                    for i in range(0, len(contact_number), 4)
-                                ]
+                            start_date = pytz.timezone("Europe/London").localize(start_date)
+                            end_date = datetime.strptime(
+                                record["Return_Date_Time"], "%d/%m/%Y %H:%M"
+                            )
+                            end_date = pytz.timezone("Europe/London").localize(end_date)
+                            current_time = datetime.now(pytz.timezone("Europe/London"))
+
+                            is_drop_off = current_time < end_date
+                            is_active = (
+                                is_drop_off
+                                and start_date - timedelta(hours=24) <= current_time <= end_date
+                            ) or (
+                                not is_drop_off
+                                and start_date <= current_time <= end_date + timedelta(hours=24)
                             )
 
-                        customer_name = record.get("Name", "Not provided")
-                        terminal = record.get("Terminal", "Not provided")
-                        allocated_car_park = record.get("Allocated_Car_Park", "Not provided")
+                            result = {
+                                "found": True,
+                                "expired": not is_active,
+                                "isDropOff": is_drop_off,
+                                "customerName": record.get("Name", "Not provided"),
+                                "terminal": record.get("Terminal", "Not provided"),
+                                "startDate": start_date.strftime("%I:%M %p %d/%m/%Y"),
+                                "endDate": end_date.strftime("%I:%M %p %d/%m/%Y"),
+                                "contactNumber": record.get("Contact_Number", "Not provided"),
+                                "allocatedCarPark": record.get(
+                                    "Allocated_Car_Park", "Not provided"
+                                ),
+                                "registration": formatted_registration,
+                                "vehicleMake": record.get("Vehicle_Make", "Not provided"),
+                                "dropOffStatus": record.get("Drop_Off_Status", "Not Set"),
+                                "collectionStatus": record.get("Collection_Status", "Not Set"),
+                            }
 
-                        result = {
-                            "found": True,
-                            "customerName": customer_name,
-                            "terminal": terminal,
-                            "bookingTime": formatted_booking_time,
-                            "contactNumber": contact_number,
-                            "allocatedCarPark": allocated_car_park,
-                            "registration": formatted_registration,
-                        }
-
-                        await result_callback(json.dumps(result))
+                            await result_callback(json.dumps(result))
+                        except ValueError as e:
+                            logger.error(f"Error parsing booking dates: {e}")
+                            await result_callback(
+                                json.dumps({"error": f"Error parsing booking dates: {str(e)}"})
+                            )
                     else:
                         logger.warning(
                             f"No booking found for registration: {formatted_registration}"
@@ -79,12 +94,6 @@ async def find_booking(function_name, tool_call_id, arguments, llm, context, res
                                 }
                             )
                         )
-                elif response.status == 404:
-                    logger.warning(f"No booking found for registration: {formatted_registration}")
-                    await result_callback(json.dumps({"error": "Booking not found"}))
-                elif response.status == 401:
-                    logger.error("Unauthorized access to Airtable API")
-                    await result_callback(json.dumps({"error": "Authentication failed"}))
                 else:
                     logger.error(f"Error response from Airtable: {response.status}")
                     await result_callback(

@@ -3,7 +3,17 @@ import pytz
 from datetime import datetime
 from loguru import logger
 import aiohttp
+import re
 from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
+
+
+def clean_phone_number(phone_number):
+    # Remove all non-digit characters
+    cleaned_number = re.sub(r"\D", "", phone_number)
+    # Ensure the number starts with '0' for UK numbers
+    if cleaned_number.startswith("44"):
+        cleaned_number = "0" + cleaned_number[2:]
+    return cleaned_number
 
 
 async def update_phone_number(
@@ -12,10 +22,13 @@ async def update_phone_number(
     registration = arguments.get("registration")
     phone_number = arguments.get("phone_number")
 
+    # Clean the phone number
+    cleaned_phone_number = clean_phone_number(phone_number)
+
     timezone = pytz.timezone("Europe/London")
     current_time = datetime.now(timezone)
     logger.debug(
-        f"Updating phone number for registration: {registration}, new number: {phone_number}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
+        f"Updating phone number for registration: {registration}, new number: {cleaned_phone_number}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
     formatted_registration = registration.replace(" ", "").upper()
@@ -49,7 +62,9 @@ async def update_phone_number(
                         f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}"
                     )
                     patch_data = {
-                        "records": [{"id": record_id, "fields": {"Contact_Number": phone_number}}],
+                        "records": [
+                            {"id": record_id, "fields": {"Contact_Number": cleaned_phone_number}}
+                        ],
                         "typecast": True,
                     }
 
@@ -59,14 +74,14 @@ async def update_phone_number(
                         if patch_response.status == 200:
                             patch_data = await patch_response.json()
                             logger.info(
-                                f"Phone number updated successfully. New number: {phone_number}"
+                                f"Phone number updated successfully. New number: {cleaned_phone_number}"
                             )
                             await result_callback(
                                 json.dumps(
                                     {
                                         "success": "Phone number updated successfully.",
                                         "updatedRecord": patch_data["records"][0],
-                                        "updatedPhoneNumber": phone_number,
+                                        "updatedPhoneNumber": cleaned_phone_number,
                                     }
                                 )
                             )
