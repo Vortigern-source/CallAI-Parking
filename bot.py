@@ -110,7 +110,7 @@ from functions.whatsapp_message import whatsapp_message_extension
 # Define custom interruption processor
 from custom_pipecat.custom_processors.interruption_processor import InterruptionFrameProcessor
 
-interruption_frame_processor = InterruptionFrameProcessor()
+
 
 
 # Main function to run the bot
@@ -420,6 +420,8 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             messages[0]["content"] += (
                 "\n\nImportant: After finding a booking, always check the 'dropOffStatus' for drop-offs or 'collectionStatus' for collections. If the relevant status is 'Driver Requested', inform the customer that a driver has already been requested for their booking. Ask if they're calling about a different booking or if there's anything else you can help with."
             )
+
+            interruption_frame_processor = InterruptionFrameProcessor()
 
             context = OpenAILLMContext(messages, tools)
             context_aggregator = llm.create_context_aggregator(context)
