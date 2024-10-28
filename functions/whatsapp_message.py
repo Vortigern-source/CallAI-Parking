@@ -190,12 +190,23 @@ New Booking - {booking_type}:
             )
 
 
-# Add this new function to the existing whatsapp_message.py file
-
-
 async def whatsapp_message_extension(
-    function_name, tool_call_id, booking_details, llm, context, result_callback
+    function_name, tool_call_id, arguments, llm, context, result_callback
 ):
+    # Get the latest data from the find_booking result in context
+    find_booking_result = json.loads(context.messages[-2]["content"])
+
+    # Extract booking details
+    booking_details = {
+        "registration": find_booking_result.get("registration"),
+        "customerName": find_booking_result.get("customerName"),
+        "vehicleMake": find_booking_result.get("vehicleMake"),
+        "contactNumber": find_booking_result.get("contactNumber"),
+        "endDate": find_booking_result.get("endDate"),
+        "terminal": find_booking_result.get("terminal"),
+        "allocatedCarPark": find_booking_result.get("allocatedCarPark"),
+    }
+
     twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
     twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN")
     twilio_whatsapp_number = os.getenv("TWILIO_WHATSAPP_NUMBER")
@@ -203,13 +214,12 @@ async def whatsapp_message_extension(
 
     message = f"""
 Booking Extension Required:
-- Booking Reference: {booking_details.get('bookingRef', 'N/A')}
-- Vehicle: {booking_details.get('vehicleMake', 'N/A')} ({booking_details.get('registration', 'N/A')})
-- Customer Name: {booking_details.get('customerName', 'N/A')}
-- Contact Number: {booking_details.get('contactNumber', 'N/A')}
-- Original End Date/Time: {booking_details.get('endDate', 'N/A')}
-- Terminal: {booking_details.get('terminal', 'N/A')}
-- Allocated Car Park: {booking_details.get('allocatedCarPark', 'N/A')}
+- Vehicle: {booking_details["vehicleMake"]} ({booking_details["registration"]})
+- Customer Name: {booking_details["customerName"]}
+- Contact Number: {booking_details["contactNumber"]}
+- Original End Date/Time: {booking_details["endDate"]}
+- Terminal: {booking_details["terminal"]}
+- Allocated Car Park: {booking_details["allocatedCarPark"]}
 
 This customer's booking has expired, and they wish to extend it. Please contact the customer to arrange the extension and additional payment.
 """
