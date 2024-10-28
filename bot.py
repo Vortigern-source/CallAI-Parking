@@ -65,7 +65,7 @@ from custom_pipecat.custom_processors.transcripts_processor import (
 )
 from custom_pipecat.custom_processors.debugging_processor import DebuggingFrameProcessor
 
-from pipecat.services.cartesia import CartesiaTTSService
+from custom_pipecat.custom_services.custom_cartesia import CartesiaTTSService
 from pipecat.transcriptions.language import Language
 
 # Utility functions for reading parameters and handling file paths

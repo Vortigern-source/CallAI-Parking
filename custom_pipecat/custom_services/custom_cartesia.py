@@ -23,7 +23,6 @@ from pipecat.frames.frames import (
     TTSAudioRawFrame,
     TTSStartedFrame,
     TTSStoppedFrame,
-    LLMFullResponseEndFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.services.ai_services import TTSService, WordTTSService
@@ -69,9 +68,6 @@ def language_to_cartesia_language(language: Language) -> str | None:
 
 class CartesiaTTSService(WordTTSService):
     class InputParams(BaseModel):
-        encoding: Optional[str] = "pcm_s16le"
-        sample_rate: Optional[int] = 16000
-        container: Optional[str] = "raw"
         language: Optional[Language] = Language.EN
         speed: Optional[Union[str, float]] = ""
         emotion: Optional[List[str]] = []
@@ -84,6 +80,9 @@ class CartesiaTTSService(WordTTSService):
         cartesia_version: str = "2024-06-10",
         url: str = "wss://api.cartesia.ai/tts/websocket",
         model: str = "sonic-english",
+        sample_rate: int = 16000,
+        encoding: str = "pcm_s16le",
+        container: str = "raw",
         params: InputParams = InputParams(),
         **kwargs,
     ):
@@ -100,7 +99,7 @@ class CartesiaTTSService(WordTTSService):
         super().__init__(
             aggregate_sentences=True,
             push_text_frames=False,
-            sample_rate=params.sample_rate,
+            sample_rate=sample_rate,
             **kwargs,
         )
 
@@ -109,9 +108,9 @@ class CartesiaTTSService(WordTTSService):
         self._url = url
         self._settings = {
             "output_format": {
-                "container": params.container,
-                "encoding": params.encoding,
-                "sample_rate": params.sample_rate,
+                "container": container,
+                "encoding": encoding,
+                "sample_rate": sample_rate,
             },
             "language": self.language_to_service_language(params.language)
             if params.language
@@ -227,6 +226,9 @@ class CartesiaTTSService(WordTTSService):
                     continue
                 if msg["type"] == "done":
                     await self.stop_ttfb_metrics()
+                    # Unset _context_id but not the _context_id_start_timestamp
+                    # because we are likely still playing out audio and need the
+                    # timestamp to set send context frames.
                     self._context_id = None
                     # await self.add_word_timestamps(
                     #     [("TTSStoppedFrame", 0), ("LLMFullResponseEndFrame", 0)]
@@ -283,54 +285,9 @@ class CartesiaTTSService(WordTTSService):
         except Exception as e:
             logger.error(f"{self} exception: {e}")
 
-    # async def _receive_task_handler(self):
-    #     try:
-    #         async for message in self._get_websocket():
-    #             msg = json.loads(message)
-    #             if not msg or msg["context_id"] != self._context_id:
-    #                 continue
-    #             if msg["type"] == "done":
-    #                 # Do not send TTSStoppedFrame or LLMFullResponseEndFrame here
-    #                 # Instead, set a flag indicating TTS is done
-    #                 self._tts_done = True
-    #                 self._context_id = None
-    #             elif msg["type"] == "timestamps":
-    #                 word_timestamps = list(zip(msg["word_timestamps"]["words"], msg["word_timestamps"]["start"]))
-    #                 await self.add_word_timestamps(word_timestamps)
-    #             elif msg["type"] == "chunk":
-    #                 await self.stop_ttfb_metrics()
-    #                 self.start_word_timestamps()
-    #                 frame = TTSAudioRawFrame(
-    #                     audio=base64.b64decode(msg["data"]),
-    #                     sample_rate=self._settings["output_format"]["sample_rate"],
-    #                     num_channels=1,
-    #                 )
-    #                 await self.push_frame(frame)
-    #             elif msg["type"] == "error":
-    #                 logger.error(f"{self} error: {msg}")
-    #                 await self.stop_all_metrics()
-    #                 await self.push_error(ErrorFrame(f'{self} error: {msg["error"]}'))
-    #             else:
-    #                 logger.error(f"Cartesia error, unknown message type: {msg}")
-    #         # After processing all messages, handle TTS completion
-    #         if self._tts_done:
-    #             await self._on_tts_complete()
-    #     except asyncio.CancelledError:
-    #         pass
-    #     except Exception as e:
-    #         logger.error(f"{self} exception: {e}")
-
-    # async def _on_tts_complete(self):
-    #     # This method is called after all audio frames have been processed
-    #     # You can update the context here if needed
-    #     pass
-
 
 class CartesiaHttpTTSService(TTSService):
     class InputParams(BaseModel):
-        encoding: Optional[str] = "pcm_s16le"
-        sample_rate: Optional[int] = 16000
-        container: Optional[str] = "raw"
         language: Optional[Language] = Language.EN
         speed: Optional[Union[str, float]] = ""
         emotion: Optional[List[str]] = []
@@ -342,17 +299,20 @@ class CartesiaHttpTTSService(TTSService):
         voice_id: str,
         model: str = "sonic-english",
         base_url: str = "https://api.cartesia.ai",
+        sample_rate: int = 8000,
+        encoding: str = "pcm_mulaw",
+        container: str = "raw",
         params: InputParams = InputParams(),
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(sample_rate=sample_rate, **kwargs)
 
         self._api_key = api_key
         self._settings = {
             "output_format": {
-                "container": params.container,
-                "encoding": params.encoding,
-                "sample_rate": params.sample_rate,
+                "container": container,
+                "encoding": encoding,
+                "sample_rate": sample_rate,
             },
             "language": self.language_to_service_language(params.language)
             if params.language
