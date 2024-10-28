@@ -110,8 +110,6 @@ from functions.whatsapp_message import whatsapp_message_extension
 # Define custom interruption processor
 from custom_pipecat.custom_processors.interruption_processor import InterruptionFrameProcessor
 
-interruption_frame_processor = InterruptionFrameProcessor()
-
 
 # Main function to run the bot
 async def run_bot(websocket_client, stream_sid, call_sid, call_info):
@@ -207,6 +205,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             #     api_key=os.getenv("ELEVENLABS_API_KEY", ""),
             #     voice_id=os.getenv("ELEVENLABS_VOICE_ID", ""),
             # )
+            interruption_frame_processor = InterruptionFrameProcessor()
 
             tools = [
                 ChatCompletionToolParam(
@@ -423,8 +422,6 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
 
             context = OpenAILLMContext(messages, tools)
             context_aggregator = llm.create_context_aggregator(context)
-            tma_in = LLMUserResponseAggregator(context)
-            tma_out = LLMAssistantResponseAggregator(context)
 
             # Define the conversation pipeline
             pipeline = Pipeline(
