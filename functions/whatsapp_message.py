@@ -8,14 +8,15 @@ from .airtable_config import (
     AIRTABLE_BASE_ID,
     AIRTABLE_BOOKINGS_TABLE,
 )
+from .utils import format_registration
 
 
 async def whatsapp_message(function_name, tool_call_id, arguments, llm, context, result_callback):
     registration = arguments.get("registration")
-    is_drop_off = arguments.get("isDropOff")
+    is_drop_off = arguments.get("is_drop_off")
 
     if is_drop_off is None:
-        await result_callback(json.dumps({"error": "isDropOff parameter is required"}))
+        await result_callback(json.dumps({"error": "is_drop_off parameter is required"}))
         return
 
     table_name = AIRTABLE_BOOKINGS_TABLE
@@ -24,7 +25,7 @@ async def whatsapp_message(function_name, tool_call_id, arguments, llm, context,
     twilio_whatsapp_number = os.getenv("TWILIO_WHATSAPP_NUMBER")
     manager_whatsapp_group = os.getenv("MANAGER_WHATSAPP_GROUP")
 
-    formatted_registration = registration.replace(" ", "").upper()
+    formatted_registration = format_registration(registration)
 
     airtable_url = (
         f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{table_name}?"
@@ -52,7 +53,7 @@ async def whatsapp_message(function_name, tool_call_id, arguments, llm, context,
                         json.dumps(
                             {
                                 "success": "Driver already requested.",
-                                "isDropOff": is_drop_off,
+                                "is_drop_off": is_drop_off,
                             }
                         )
                     )
@@ -79,7 +80,7 @@ New Booking - {booking_type}:
 - Customer Name: {name}
 - Contact Number: {contact_number}
 - {"Drop-off" if is_drop_off else "Collection"} Date/Time: {entry_date_time}
-- Estimated {"Drop-off" if is_drop_off else "Arrival"} Time: {"" if is_drop_off else "Customer has collected luggage"}
+- Estimated {"Drop-off" if is_drop_off else "Arrival"} Time: {estimated_eta if is_drop_off else "Customer has collected luggage"}
 - Terminal: {terminal}
 - Allocated Car Park: {allocated_car_park}
 """
@@ -129,7 +130,7 @@ New Booking - {booking_type}:
                                 {
                                     "success": "Manager notified successfully.",
                                     "messageId": twilio_data["sid"],
-                                    "isDropOff": is_drop_off,
+                                    "is_drop_off": is_drop_off,
                                 }
                             )
                         )
@@ -139,7 +140,7 @@ New Booking - {booking_type}:
                             json.dumps(
                                 {
                                     "success": "Manager notified, but no message ID available.",
-                                    "isDropOff": is_drop_off,
+                                    "is_drop_off": is_drop_off,
                                 }
                             )
                         )
@@ -153,7 +154,7 @@ New Booking - {booking_type}:
                 # Update the status in Airtable
                 status_field = "Drop_Off_Status" if is_drop_off else "Collection_Status"
                 status_value = "Driver Requested"
-                eta_value = "" if is_drop_off else "Customer has collected luggage"
+                eta_value = estimated_eta if is_drop_off else "Customer has collected luggage"
 
                 patch_url = (
                     f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}"

@@ -5,14 +5,27 @@ from loguru import logger
 import aiohttp
 import re
 from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
+from .utils import create_response, format_registration
 
 
 def clean_phone_number(phone_number):
+    if not phone_number:
+        return None
+
     # Remove all non-digit characters
     cleaned_number = re.sub(r"\D", "", phone_number)
-    # Ensure the number starts with '0' for UK numbers
+
+    # Handle international format
     if cleaned_number.startswith("44"):
         cleaned_number = "0" + cleaned_number[2:]
+    elif not cleaned_number.startswith("0"):
+        cleaned_number = "0" + cleaned_number
+
+    # Validate length for UK numbers (should be 11 digits)
+    if len(cleaned_number) != 11:
+        logger.warning(f"Invalid phone number length: {cleaned_number}")
+        return None
+
     return cleaned_number
 
 
@@ -31,7 +44,7 @@ async def update_phone_number(
         f"Updating phone number for registration: {registration}, new number: {cleaned_phone_number}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
-    formatted_registration = registration.replace(" ", "").upper()
+    formatted_registration = format_registration(registration)
 
     url = (
         f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}?"
@@ -110,5 +123,5 @@ async def update_phone_number(
         except Exception as error:
             logger.error(f"Error updating phone number: {str(error)}")
             await result_callback(
-                json.dumps({"error": "Failed to update phone number.", "details": str(error)})
+                create_response(False, "Failed to update phone number.", {"details": str(error)})
             )

@@ -1,22 +1,31 @@
-import json
+import os
 import pytz
+import aiohttp
 from datetime import datetime
 from loguru import logger
-import aiohttp
+from .constants import VALID_TERMINALS
+from .utils import create_response, format_registration
 from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
-
 from .whatsapp_message import whatsapp_message
+import json
 
 
 async def update_terminal(function_name, tool_call_id, arguments, llm, context, result_callback):
     registration = arguments.get("registration")
     terminal = arguments.get("terminal")
 
-    # Format the terminal input
+    if not terminal:
+        await result_callback(create_response(False, "Terminal cannot be empty"))
+        return
+
     formatted_terminal = terminal.strip()
     if not formatted_terminal.lower().startswith("terminal"):
         formatted_terminal = f"Terminal {formatted_terminal}"
     formatted_terminal = formatted_terminal.title()
+
+    if formatted_terminal not in ["Terminal 1", "Terminal 2", "Terminal 3"]:
+        await result_callback(create_response(False, f"Invalid terminal: {formatted_terminal}"))
+        return
 
     timezone = pytz.timezone("Europe/London")
     current_time = datetime.now(timezone)
@@ -24,7 +33,7 @@ async def update_terminal(function_name, tool_call_id, arguments, llm, context, 
         f"Updating terminal for registration: {registration}, new terminal: {formatted_terminal}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
-    formatted_registration = registration.replace(" ", "").upper()
+    formatted_registration = format_registration(registration)
 
     url = (
         f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}?"
@@ -81,9 +90,7 @@ async def update_terminal(function_name, tool_call_id, arguments, llm, context, 
                                 tool_call_id,
                                 {
                                     "registration": formatted_registration,
-                                    "isDropOff": context.get(
-                                        "is_drop_off", True
-                                    ),  # Use the context to determine if it's a drop-off
+                                    "is_drop_off": True,
                                 },
                                 llm,
                                 context,

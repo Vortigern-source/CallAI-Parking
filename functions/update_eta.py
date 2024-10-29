@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from loguru import logger
 import aiohttp
 from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
+from .utils import format_registration
 
 
 def parse_eta(eta_string, current_time, timezone):
@@ -44,7 +45,7 @@ async def update_eta(function_name, tool_call_id, arguments, llm, context, resul
     current_time = datetime.now(timezone)
 
     # Format the registration number
-    formatted_registration = "".join(char for char in registration if char.isalnum()).upper()
+    formatted_registration = format_registration(registration)
 
     logger.debug(
         f"Updating ETA for registration: {formatted_registration}, customerETA: {customer_eta}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
@@ -79,6 +80,11 @@ async def update_eta(function_name, tool_call_id, arguments, llm, context, resul
                     if parsed_eta is None:
                         logger.error(f"Invalid ETA format: {customer_eta}")
                         await result_callback(json.dumps({"error": "Invalid ETA format."}))
+                        return
+
+                    if parsed_eta < current_time:
+                        logger.error(f"ETA cannot be in the past: {customer_eta}")
+                        await result_callback(json.dumps({"error": "ETA cannot be in the past."}))
                         return
 
                     patch_url = (

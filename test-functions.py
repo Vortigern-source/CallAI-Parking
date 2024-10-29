@@ -43,7 +43,7 @@ async def test_update_terminal():
     await update_terminal(
         "update_terminal",
         "test_id",
-        {"registration": "FL57CHN", "terminal": "Terminal 2"},
+        {"registration": "H-N-16-Y-L-M", "terminal": "Terminal 2"},
         mock_llm,
         mock_context,
         result_callback,
@@ -55,7 +55,7 @@ async def test_update_registration():
     await update_registration(
         "update_registration",
         "test_id",
-        {"old_registration": "FL57CHN", "new_registration": "XY34ZZZ"},
+        {"old_registration": "H-N-16-Y-L-M", "new_registration": "XY34ZZZ"},
         mock_llm,
         mock_context,
         result_callback,
@@ -67,7 +67,7 @@ async def test_update_phone_number():
     await update_phone_number(
         "update_phone_number",
         "test_id",
-        {"registration": "XY34ZZZ", "phone_number": "07123456789"},
+        {"registration": "H-N-16-Y-L-M", "phone_number": "07123456789"},
         mock_llm,
         mock_context,
         result_callback,
@@ -79,7 +79,7 @@ async def test_find_booking():
     await find_booking(
         "find_booking",
         "test_id",
-        {"registration": "Y A 1 9 K X T"},
+        {"registration": "H-N-16-Y-L-M"},
         mock_llm,
         mock_context,
         result_callback,
@@ -103,7 +103,7 @@ async def test_whatsapp_message():
     await whatsapp_message(
         "whatsapp_message",
         "test_id",
-        {"registration": "XY34ZZZ"},
+        {"registration": "H-N-16-Y-L-M", "is_drop_off": True},
         mock_llm,
         mock_context,
         result_callback,
@@ -160,16 +160,16 @@ async def test_get_current_date():
 
 # Main function to run all tests
 async def run_tests():
-    # await test_update_terminal()
+    await test_update_terminal()
     # await test_update_registration()
-    # await test_update_phone_number()
-    # await test_find_booking()
+    await test_update_phone_number()
+    await test_find_booking()
     # await test_transfer_call()
-    # await test_whatsapp_message()
-    # await test_find_booking_by_phone()
+    await test_whatsapp_message()
+    await test_find_booking_by_phone()
     await test_update_eta()
-    # await test_get_current_time()
-    # await test_get_current_date()
+    await test_get_current_time()
+    await test_get_current_date()
 
 
 # Run the tests

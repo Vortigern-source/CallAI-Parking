@@ -4,6 +4,7 @@ from datetime import datetime
 from loguru import logger
 import aiohttp
 from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
+from .utils import format_registration
 
 
 async def update_vehicle_details(
@@ -18,7 +19,7 @@ async def update_vehicle_details(
         f"Updating vehicle details for registration: {registration}, new details: {vehicle_details}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
-    formatted_registration = registration.replace(" ", "").upper()
+    formatted_registration = format_registration(registration)
 
     url = (
         f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}?"

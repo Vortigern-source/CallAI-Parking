@@ -10017,3 +10017,6 @@ bot_2024-10-15_12-51-00_994821.log
 *.log
 *.pyc
 *.txt
+custom_pipecat/templates/streams.xml
+*.pyc
+*.pyc
