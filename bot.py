@@ -44,6 +44,7 @@ from pipecat.processors.aggregators.llm_response import (
 # from pipecat.services.cartesia import CartesiaTTSService
 # from pipecat.services.elevenlabs import ElevenLabsTTSService
 from pipecat.services.openai import OpenAILLMService
+from pipecat.utils.text.markdown_text_filter import MarkdownTextFilter
 
 # from pipecat.services.openai_realtime_beta import OpenAILLMServiceRealtimeBeta
 from pipecat.services.deepgram import DeepgramSTTService
@@ -65,7 +66,7 @@ from custom_pipecat.custom_processors.transcripts_processor import (
 )
 from custom_pipecat.custom_processors.debugging_processor import DebuggingFrameProcessor
 
-from custom_pipecat.custom_services.custom_cartesia import CartesiaTTSService
+from pipecat.services.cartesia import CartesiaTTSService
 from pipecat.transcriptions.language import Language
 
 # Utility functions for reading parameters and handling file paths
@@ -116,19 +117,24 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
     logger.info(f"Starting bot for stream_sid: {stream_sid}")
     async with aiohttp.ClientSession() as session:
         try:
-            vad_params = VADParams(
-                confidence=0.6,
-                # start_secs=0.2,
-                # stop_secs=1.2,
-                min_volume=0.6,
-            )
             transport = FastAPIWebsocketTransport(
                 websocket=websocket_client,
                 params=FastAPIWebsocketParams(
                     audio_out_enabled=True,
                     add_wav_header=False,
                     vad_enabled=True,
-                    vad_analyzer=SileroVADAnalyzer(),
+                    vad_analyzer=SileroVADAnalyzer(
+                        params=VADParams(
+                            confidence=0.6,
+                            min_volume=0.3,
+                            stop_secs=0.3,
+                        )
+                        # params=VADParams( #VAD PARAMS - Need to test these.
+                        #     start_secs=0.15,
+                        #    stop_secs=0.7,
+                        #    min_volume=0.55,
+                        # ),
+                    ),
                     vad_audio_passthrough=True,
                     serializer=TwilioFrameSerializer(stream_sid),
                 ),
@@ -186,7 +192,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                 api_key=os.getenv("CARTESIA_API_KEY"),
                 voice_id="79a125e8-cd45-4c13-8a67-188112f4dd22",
                 output_format={"encoding": "pcm_mulaw", "sample_rate": 8000, "container": "raw"},
-                transport=transport,
+                text_filter=MarkdownTextFilter(),
             )
 
             # tts = PlayHTTTSService(
@@ -424,6 +430,23 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             context_aggregator = llm.create_context_aggregator(context)
 
             # Define the conversation pipeline
+            interruption_frame_processor = InterruptionFrameProcessor()
+
+            # pipeline = Pipeline(
+            #     [
+            #         transport.input(),  # Websocket input from client
+            #         stt,  # Speech-To-Text
+            #         interruption_frame_processor,
+            #         context_aggregator.user(),  # User responses
+            #         llm,  # LLM
+            #         tts,  # Text-To-Speech
+            #         # sts,
+            #         transport.output(),  # Websocket output to client
+            #         bot_buffer_processor,  # Add this line
+            #         context_aggregator.assistant(),  # LLM responses
+            #         transcript_capture_processor,  # Add this line
+            #     ]
+            # )
             pipeline = Pipeline(
                 [
                     transport.input(),  # Websocket input from client
@@ -431,15 +454,13 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     interruption_frame_processor,
                     context_aggregator.user(),  # User responses
                     llm,  # LLM
+                    bot_buffer_processor,  # Move this before TTS
                     tts,  # Text-To-Speech
-                    # sts,
                     transport.output(),  # Websocket output to client
-                    bot_buffer_processor,  # Add this line
                     context_aggregator.assistant(),  # LLM responses
-                    transcript_capture_processor,  # Add this line
+                    transcript_capture_processor,
                 ]
             )
-
             # Create a pipeline task with specific parameters
             task = PipelineTask(
                 pipeline,
