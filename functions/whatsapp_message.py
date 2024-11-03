@@ -9,6 +9,16 @@ from .airtable_config import (
     AIRTABLE_BOOKINGS_TABLE,
 )
 from .utils import format_registration
+from datetime import datetime
+
+
+def format_date_for_display(date_str, input_format="%d/%m/%Y %H:%M", output_format="%m/%d/%Y %I:%M %p"):
+    """Format date for display in messages"""
+    try:
+        date_obj = datetime.strptime(date_str, input_format)
+        return date_obj.strftime(output_format)
+    except ValueError:
+        return date_str
 
 
 async def whatsapp_message(function_name, tool_call_id, arguments, llm, context, result_callback):
@@ -79,7 +89,7 @@ New Booking - {booking_type}:
 - Vehicle: {vehicle_make} ({registration})
 - Customer Name: {name}
 - Contact Number: {contact_number}
-- {"Drop-off" if is_drop_off else "Collection"} Date/Time: {entry_date_time}
+- {"Drop-off" if is_drop_off else "Collection"} Date/Time: {format_date_for_display(entry_date_time)}
 - Estimated {"Drop-off" if is_drop_off else "Arrival"} Time: {estimated_eta if is_drop_off else "Customer has collected luggage"}
 - Terminal: {terminal}
 - Allocated Car Park: {allocated_car_park}
@@ -100,7 +110,7 @@ New Booking - {booking_type}:
                 if changes:
                     message += "\nRecent Changes:\n" + "\n".join(changes)
 
-                message += f'\nAction Required: Please assign a driver for this {{"drop-off" if is_drop_off else "collection"}}.'
+                message += f'\nAction Required: Please assign a driver for this {"drop-off" if is_drop_off else "collection"}.'
 
                 logger.debug(f"WhatsApp message content: {message}")
 

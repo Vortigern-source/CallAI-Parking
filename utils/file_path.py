@@ -23,13 +23,14 @@ def get_file_path_from_raw(call_sid, to_number, folder_name, file_prefix, file_e
 
     # Create the directory structure
     date_str = datetime.now().strftime("%Y-%m-%d")
+    time_str = datetime.now().strftime("%H-%M-%S")
     directory = os.path.join(base_path, company_name, folder_name, date_str)
 
     # Ensure the directory exists
     os.makedirs(directory, exist_ok=True)
 
-    # Generate the file name
-    file_name = f"{file_prefix}_{call_sid}_{to_number}.{file_extension}"
+    # Generate the file name with timestamp
+    file_name = f"{file_prefix}_{time_str}_{call_sid}_{to_number}.{file_extension}"
 
     # Combine the directory and file name
     file_path = os.path.join(directory, file_name)

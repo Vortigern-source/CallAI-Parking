@@ -23,7 +23,7 @@ def get_current_date():
     utc_now = datetime.now(pytz.utc)
     uk_tz = pytz.timezone("Europe/London")
     uk_date = utc_now.astimezone(uk_tz)
-    formatted_date = uk_date.strftime("%d/%m/%Y")
+    formatted_date = uk_date.strftime("%m/%d/%Y")
     return {"current_date": formatted_date, "timestamp": uk_date.isoformat()}
 
 

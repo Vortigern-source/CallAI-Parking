@@ -111,6 +111,9 @@ from functions.whatsapp_message import whatsapp_message_extension
 # Define custom interruption processor
 from custom_pipecat.custom_processors.interruption_processor import InterruptionFrameProcessor
 
+# Add import at the top
+from custom_pipecat.custom_processors.audio_coordinator import AudioCoordinatorProcessor
+
 
 # Main function to run the bot
 async def run_bot(websocket_client, stream_sid, call_sid, call_info):
@@ -425,28 +428,15 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             messages[0]["content"] += (
                 "\n\nImportant: After finding a booking, always check the 'dropOffStatus' for drop-offs or 'collectionStatus' for collections. If the relevant status is 'Driver Requested', inform the customer that a driver has already been requested for their booking. Ask if they're calling about a different booking or if there's anything else you can help with."
             )
-
+            messages[0]["content"] += (
+                "\n\nImportant: Ensure you look up the booking details for the customer's registration number right after saying 'I will now look up your booking details'."
+            )
             context = OpenAILLMContext(messages, tools)
             context_aggregator = llm.create_context_aggregator(context)
 
             # Define the conversation pipeline
             interruption_frame_processor = InterruptionFrameProcessor()
 
-            # pipeline = Pipeline(
-            #     [
-            #         transport.input(),  # Websocket input from client
-            #         stt,  # Speech-To-Text
-            #         interruption_frame_processor,
-            #         context_aggregator.user(),  # User responses
-            #         llm,  # LLM
-            #         tts,  # Text-To-Speech
-            #         # sts,
-            #         transport.output(),  # Websocket output to client
-            #         bot_buffer_processor,  # Add this line
-            #         context_aggregator.assistant(),  # LLM responses
-            #         transcript_capture_processor,  # Add this line
-            #     ]
-            # )
             pipeline = Pipeline(
                 [
                     transport.input(),  # Websocket input from client
@@ -454,13 +444,15 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     interruption_frame_processor,
                     context_aggregator.user(),  # User responses
                     llm,  # LLM
-                    bot_buffer_processor,  # Move this before TTS
+                    bot_buffer_processor,  # Buffer responses
                     tts,  # Text-To-Speech
+                    AudioCoordinatorProcessor(),  # Using the improved version
                     transport.output(),  # Websocket output to client
                     context_aggregator.assistant(),  # LLM responses
                     transcript_capture_processor,
                 ]
             )
+
             # Create a pipeline task with specific parameters
             task = PipelineTask(
                 pipeline,

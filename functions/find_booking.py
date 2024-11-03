@@ -12,6 +12,15 @@ def convert_to_12hour(time_str):
     return time_obj.strftime("%I:%M %p")
 
 
+def format_date(date_str, input_format="%d/%m/%Y %H:%M", output_format="%m/%d/%Y %I:%M %p"):
+    """Convert date string from one format to another"""
+    try:
+        date_obj = datetime.strptime(date_str, input_format)
+        return date_obj.strftime(output_format)
+    except ValueError:
+        return date_str
+
+
 async def find_booking(function_name, tool_call_id, arguments, llm, context, result_callback):
     registration = arguments.get("registration", "")
 
@@ -61,11 +70,11 @@ async def find_booking(function_name, tool_call_id, arguments, llm, context, res
                             result = {
                                 "found": True,
                                 "expired": not is_active,
-                                "isDropOff": is_drop_off,
+                                "is_drop_off": is_drop_off,
                                 "customerName": record.get("Name", "Not provided"),
                                 "terminal": record.get("Terminal", "Not provided"),
-                                "startDate": start_date.strftime("%I:%M %p %d/%m/%Y"),
-                                "endDate": end_date.strftime("%I:%M %p %d/%m/%Y"),
+                                "startDate": format_date(start_date.strftime("%d/%m/%Y %H:%M")),
+                                "endDate": format_date(end_date.strftime("%d/%m/%Y %H:%M")),
                                 "contactNumber": record.get("Contact_Number", "Not provided"),
                                 "allocatedCarPark": record.get(
                                     "Allocated_Car_Park", "Not provided"
