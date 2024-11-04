@@ -112,7 +112,42 @@ from functions.whatsapp_message import whatsapp_message_extension
 from custom_pipecat.custom_processors.interruption_processor import InterruptionFrameProcessor
 
 # Add import at the top
-from custom_pipecat.custom_processors.audio_coordinator import AudioCoordinatorProcessor
+
+# Add these imports at the top
+import re
+import asyncio
+from typing import Optional
+
+
+# Add this helper function
+async def say_with_delay(tts, text: str):
+    """Split text into sentences and say them with delays"""
+    # Split on sentence endings (.!?) followed by spaces
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    for sentence in sentences:
+        if sentence.strip():  # Only process non-empty sentences
+            await tts.say(sentence.strip())
+            # Wait for 1 second after each sentence
+            await asyncio.sleep(1)
+
+
+# Add this class before the run_bot function
+class TTSQueueManager:
+    def __init__(self):
+        self._lock = asyncio.Lock()
+        self._current_tts_task: Optional[asyncio.Task] = None
+        self._min_delay = 0.5  # 500ms minimum delay between TTS
+
+    async def say(self, tts, text: str):
+        async with self._lock:
+            # Wait for any previous TTS to complete
+            if self._current_tts_task and not self._current_tts_task.done():
+                await self._current_tts_task
+                await asyncio.sleep(self._min_delay)  # Enforced delay between TTS
+
+            # Create new TTS task
+            self._current_tts_task = asyncio.create_task(tts.say(text))
+            await self._current_tts_task
 
 
 # Main function to run the bot
@@ -128,15 +163,11 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     vad_enabled=True,
                     vad_analyzer=SileroVADAnalyzer(
                         params=VADParams(
-                            confidence=0.6,
-                            min_volume=0.3,
-                            stop_secs=0.3,
+                            confidence=0.8,
+                            start_secs=0.1,
+                            stop_secs=0.5,
+                            min_volume=0.4,
                         )
-                        # params=VADParams( #VAD PARAMS - Need to test these.
-                        #     start_secs=0.15,
-                        #    stop_secs=0.7,
-                        #    min_volume=0.55,
-                        # ),
                     ),
                     vad_audio_passthrough=True,
                     serializer=TwilioFrameSerializer(stream_sid),
@@ -190,11 +221,19 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             #     region=os.getenv("AZURE_SPEECH_REGION"),
             # )
 
-            # Initialize Cartesia TTS service
+            # Initialize Cartesia TTS service with timing controls
             tts = CartesiaTTSService(
                 api_key=os.getenv("CARTESIA_API_KEY"),
                 voice_id="79a125e8-cd45-4c13-8a67-188112f4dd22",
-                output_format={"encoding": "pcm_mulaw", "sample_rate": 8000, "container": "raw"},
+                params=CartesiaTTSService.InputParams(
+                    chunk_size=4096,  # Larger chunks for better flow
+                    delay_between_chunks=500,  # 500ms delay between chunks
+                    max_concurrent_requests=1,  # Only allow one TTS at a time
+                    buffer_size=8192,  # Larger buffer for smoother playback
+                    sample_rate=8000,  # Match Twilio's sample rate
+                    channels=1,  # Mono audio
+                    speech_rate=0.9,  # Slightly slower speech rate
+                ),
                 text_filter=MarkdownTextFilter(),
             )
 
@@ -417,19 +456,14 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             ]
 
             # Define initial messages for the conversation
-            messages = [
-                {
-                    "role": "system",
-                    "content": params["prompts"]["assistant_prompt"],
-                }
-            ]
+            messages = [{"role": "system", "content": params["prompts"]["assistant_prompt"]}]
 
             # Add additional instruction to the system prompt
             messages[0]["content"] += (
                 "\n\nImportant: After finding a booking, always check the 'dropOffStatus' for drop-offs or 'collectionStatus' for collections. If the relevant status is 'Driver Requested', inform the customer that a driver has already been requested for their booking. Ask if they're calling about a different booking or if there's anything else you can help with."
             )
             messages[0]["content"] += (
-                "\n\nImportant: Ensure you look up the booking details for the customer's registration number right after saying 'I will now look up your booking details'."
+                "\n\nImportant: Ensure you look up the booking details for the customer's registration number right after saying 'I will look up your booking details'."
             )
             context = OpenAILLMContext(messages, tools)
             context_aggregator = llm.create_context_aggregator(context)
@@ -446,12 +480,14 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     llm,  # LLM
                     bot_buffer_processor,  # Buffer responses
                     tts,  # Text-To-Speech
-                    AudioCoordinatorProcessor(),  # Using the improved version
                     transport.output(),  # Websocket output to client
                     context_aggregator.assistant(),  # LLM responses
                     transcript_capture_processor,
                 ]
             )
+
+            # Initialize TTS queue manager
+            tts_manager = TTSQueueManager()
 
             # Create a pipeline task with specific parameters
             task = PipelineTask(
@@ -461,6 +497,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     enable_metrics=True,
                     enable_usage_metrics=True,
                     report_only_initial_ttfb=True,
+                    tts_manager=tts_manager,  # Add this
                 ),
             )
 
@@ -486,10 +523,9 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                 # Example of a log to test the configuration
                 logger.info(f"New call connected. Logs are written to {file_path}")
                 logger.info(f"Call from {call_info._from} to {call_info.to}")
-                # Send welcome message
+                # Send welcome message using queue manager
                 welcome_message = params["discussion"]["welcome_message"]
-                sentences_welcome_message = re.split(r"(?<=[.!?])\s+", welcome_message)
-                await tts.say(welcome_message)
+                await tts_manager.say(tts, welcome_message)
 
             # Define event handler for client disconnection
             @transport.event_handler("on_client_disconnected")
