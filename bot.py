@@ -4,7 +4,7 @@ import re
 import aiohttp
 import asyncio
 from loguru import logger
-import logging  # Add this import
+import logging
 
 from typing import List, Dict
 from dotenv import load_dotenv
@@ -13,7 +13,6 @@ from datetime import datetime
 from openai.types.chat import ChatCompletionToolParam
 
 # Pipecat imports
-# These imports are from the Pipecat library, which provides various components for building conversational AI pipelines
 from pipecat.frames.frames import (
     EndFrame,
     LLMMessagesFrame,
@@ -29,6 +28,7 @@ from pipecat.frames.frames import (
     BotSpeakingFrame,
     TTSAudioRawFrame,
     OutputAudioRawFrame,
+    TTSTextFrame,
 )
 
 from pipecat.services.openai import OpenAILLMContext
@@ -40,13 +40,9 @@ from pipecat.processors.aggregators.llm_response import (
     LLMUserResponseAggregator,
 )
 
-# Commented out unused imports
-# from pipecat.services.cartesia import CartesiaTTSService
-# from pipecat.services.elevenlabs import ElevenLabsTTSService
 from pipecat.services.openai import OpenAILLMService
 from pipecat.utils.text.markdown_text_filter import MarkdownTextFilter
 
-# from pipecat.services.openai_realtime_beta import OpenAILLMServiceRealtimeBeta
 from pipecat.services.deepgram import DeepgramSTTService
 from pipecat.transports.network.fastapi_websocket import (
     FastAPIWebsocketTransport,
@@ -59,7 +55,6 @@ from pipecat.serializers.twilio import TwilioFrameSerializer
 from deepgram import LiveOptions
 
 # Custom processors
-# These are custom-built processors for handling transcripts and debugging
 from custom_pipecat.custom_processors.transcripts_processor import (
     TranscriptCaptureProcessor,
     BotBufferProcessor,
@@ -106,48 +101,12 @@ from functions import (
     update_vehicle_details,
 )
 
+from functions.find_booking_by_ref import find_booking_by_ref
+
 from functions.whatsapp_message import whatsapp_message_extension
 
 # Define custom interruption processor
 from custom_pipecat.custom_processors.interruption_processor import InterruptionFrameProcessor
-
-# Add import at the top
-
-# Add these imports at the top
-import re
-import asyncio
-from typing import Optional
-
-
-# Add this helper function
-async def say_with_delay(tts, text: str):
-    """Split text into sentences and say them with delays"""
-    # Split on sentence endings (.!?) followed by spaces
-    sentences = re.split(r"(?<=[.!?])\s+", text)
-    for sentence in sentences:
-        if sentence.strip():  # Only process non-empty sentences
-            await tts.say(sentence.strip())
-            # Wait for 1 second after each sentence
-            await asyncio.sleep(1)
-
-
-# Add this class before the run_bot function
-class TTSQueueManager:
-    def __init__(self):
-        self._lock = asyncio.Lock()
-        self._current_tts_task: Optional[asyncio.Task] = None
-        self._min_delay = 0.5  # 500ms minimum delay between TTS
-
-    async def say(self, tts, text: str):
-        async with self._lock:
-            # Wait for any previous TTS to complete
-            if self._current_tts_task and not self._current_tts_task.done():
-                await self._current_tts_task
-                await asyncio.sleep(self._min_delay)  # Enforced delay between TTS
-
-            # Create new TTS task
-            self._current_tts_task = asyncio.create_task(tts.say(text))
-            await self._current_tts_task
 
 
 # Main function to run the bot
@@ -163,10 +122,9 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     vad_enabled=True,
                     vad_analyzer=SileroVADAnalyzer(
                         params=VADParams(
-                            confidence=0.8,
-                            start_secs=0.1,
-                            stop_secs=0.5,
-                            min_volume=0.4,
+                            confidence=0.6,
+                            min_volume=0.3,
+                            stop_secs=0.3,
                         )
                     ),
                     vad_audio_passthrough=True,
@@ -177,7 +135,6 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
 
             # Initialize OpenAI LLM service
             llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4o")
-            # sts = OpenAILLMServiceRealtimeBeta(api_key=os.getenv("OPENAI_API_KEY"))
 
             logger.debug("OpenAI LLM service initialized")
 
@@ -193,6 +150,9 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             llm.register_function("get_current_date", handle_get_current_date)
             llm.register_function("whatsapp_message_extension", whatsapp_message_extension)
             llm.register_function("update_vehicle_details", update_vehicle_details)
+            llm.register_function(
+                "find_booking_by_ref", find_booking_by_ref
+            )  # Add find_booking_by_ref registration
 
             # Initialize Deepgram STT service
             stt = DeepgramSTTService(
@@ -202,7 +162,6 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     model="nova-2-phonecall",
                     sample_rate=8000,
                     channels=2,
-                    # multichannel=True,
                     interim_results=True,
                     smart_format=True,
                     punctuate=True,
@@ -211,51 +170,39 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                 ),
             )
 
-            # stt = GladiaSTTService(
-            #     api_key=os.getenv("GLADIA_API_KEY"),
-            #     sample_rate=8000,
-            #     encoding="mulaw",
-            # )
-            # stt = AzureSTTService(
-            #     api_key=os.getenv("AZURE_SPEECH_KEY"),
-            #     region=os.getenv("AZURE_SPEECH_REGION"),
-            # )
-
-            # Initialize Cartesia TTS service with timing controls
+            # Initialize Cartesia TTS service
             tts = CartesiaTTSService(
                 api_key=os.getenv("CARTESIA_API_KEY"),
                 voice_id="79a125e8-cd45-4c13-8a67-188112f4dd22",
-                params=CartesiaTTSService.InputParams(
-                    chunk_size=4096,  # Larger chunks for better flow
-                    delay_between_chunks=500,  # 500ms delay between chunks
-                    max_concurrent_requests=1,  # Only allow one TTS at a time
-                    buffer_size=8192,  # Larger buffer for smoother playback
-                    sample_rate=8000,  # Match Twilio's sample rate
-                    channels=1,  # Mono audio
-                    speech_rate=0.9,  # Slightly slower speech rate
-                ),
+                output_format={"encoding": "pcm_mulaw", "sample_rate": 8000, "container": "raw"},
                 text_filter=MarkdownTextFilter(),
             )
-
-            # tts = PlayHTTTSService(
-            #     user_id=os.getenv("PLAYHT_USER_ID"),
-            #     api_key=os.getenv("PLAYHT_API_KEY"),
-            #     voice_url="s3://voice-cloning-zero-shot/801a663f-efd0-4254-98d0-5c175514c3e8/jennifer/manifest.json",
-            #     params=PlayHTTTSService.InputParams(language=Language.EN),
-            # )
 
             # Initialize custom processors
             transcript_capture_processor = TranscriptCaptureProcessor()
             debugging_frame_processor = DebuggingFrameProcessor()
             bot_buffer_processor = BotBufferProcessor()
 
-            # tts = ElevenLabsTTSService(
-            #     api_key=os.getenv("ELEVENLABS_API_KEY", ""),
-            #     voice_id=os.getenv("ELEVENLABS_VOICE_ID", ""),
-            # )
             interruption_frame_processor = InterruptionFrameProcessor()
 
             tools = [
+                ChatCompletionToolParam(
+                    type="function",
+                    function={
+                        "name": "find_booking_by_ref",
+                        "description": "Find a booking using the booking reference number",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "booking_ref": {
+                                    "type": "string",
+                                    "description": "The booking reference number (e.g., GL-MAN-78961, CPD-19-581405)",
+                                },
+                            },
+                            "required": ["booking_ref"],
+                        },
+                    },
+                ),
                 ChatCompletionToolParam(
                     type="function",
                     function={
@@ -465,6 +412,9 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             messages[0]["content"] += (
                 "\n\nImportant: Ensure you look up the booking details for the customer's registration number right after saying 'I will look up your booking details'."
             )
+            messages[0]["content"] += (
+                "\n\nRight after you say something like 'I'll now send a message to our team to request a driver for your drop-off.' Never go silent always be pro-active. So either instantly do the function call or confirm with the customer. "
+            )
             context = OpenAILLMContext(messages, tools)
             context_aggregator = llm.create_context_aggregator(context)
 
@@ -478,18 +428,15 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     interruption_frame_processor,
                     context_aggregator.user(),  # User responses
                     llm,  # LLM
-                    bot_buffer_processor,  # Buffer responses
                     tts,  # Text-To-Speech
                     transport.output(),  # Websocket output to client
+                    bot_buffer_processor,  # Add this line
                     context_aggregator.assistant(),  # LLM responses
-                    transcript_capture_processor,
+                    transcript_capture_processor,  # Add this line
                 ]
             )
 
-            # Initialize TTS queue manager
-            tts_manager = TTSQueueManager()
-
-            # Create a pipeline task with specific parameters
+            # Create pipeline task before event handlers
             task = PipelineTask(
                 pipeline,
                 PipelineParams(
@@ -497,7 +444,6 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     enable_metrics=True,
                     enable_usage_metrics=True,
                     report_only_initial_ttfb=True,
-                    tts_manager=tts_manager,  # Add this
                 ),
             )
 
@@ -525,7 +471,8 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                 logger.info(f"Call from {call_info._from} to {call_info.to}")
                 # Send welcome message using queue manager
                 welcome_message = params["discussion"]["welcome_message"]
-                await tts_manager.say(tts, welcome_message)
+                sentences_welcome_message = re.split(r"(?<=[.!?])\s+", welcome_message)
+                await tts.say(welcome_message)
 
             # Define event handler for client disconnection
             @transport.event_handler("on_client_disconnected")
@@ -554,5 +501,3 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             logger.exception(f"Error in run_bot: {str(e)}")
         finally:
             logger.info("Customer has ended call")
-            # Remove this line:
-            # logger.remove(f"file_{call_sid}")

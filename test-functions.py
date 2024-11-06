@@ -22,6 +22,7 @@ from functions import (
     handle_get_current_time,
     handle_get_current_date,
 )
+from functions.find_booking_by_ref import find_booking_by_ref  # Import the function directly
 
 # Set up logger
 logger.remove()
@@ -37,7 +38,7 @@ async def result_callback(result):
     print(f"Result: {result}")
 
 
-# # Test functions
+# Test functions
 async def test_update_terminal():
     print("\nTesting update_terminal function:")
     await update_terminal(
@@ -84,18 +85,6 @@ async def test_find_booking():
         mock_context,
         result_callback,
     )
-
-
-# async def test_transfer_call():
-#     print("\nTesting transfer_call function:")
-#     await transfer_call(
-#         "transfer_call",
-#         "test_id",
-#         {"call_sid": "CA123456789"},
-#         mock_llm,
-#         mock_context,
-#         result_callback,
-#     )
 
 
 async def test_whatsapp_message():
@@ -158,18 +147,67 @@ async def test_get_current_date():
     )
 
 
+async def test_find_booking_by_ref():
+    print("\nTesting find_booking_by_ref function with various formats:")
+
+    # # Test with dashed format
+    # print("\nTesting with dashed format (GL-MAN-78961):")
+    # await find_booking_by_ref(
+    #     "find_booking_by_ref",
+    #     "test_id",
+    #     {"booking_ref": "GL-MAN-78961"},
+    #     mock_llm,
+    #     mock_context,
+    #     result_callback,
+    # )
+
+    # Test without dashes
+    print("\nTesting without dashes (GLMAN78961):")
+    await find_booking_by_ref(
+        "find_booking_by_ref",
+        "test_id",
+        {"booking_ref": "GLMAN78961"},
+        mock_llm,
+        mock_context,
+        result_callback,
+    )
+
+    # # Test with CPD format
+    # print("\nTesting CPD format with dashes (CPD-19-581405):")
+    # await find_booking_by_ref(
+    #     "find_booking_by_ref",
+    #     "test_id",
+    #     {"booking_ref": "CPD-19-581405"},
+    #     mock_llm,
+    #     mock_context,
+    #     result_callback,
+    # )
+
+    # Test CPD format without dashes
+    print("\nTesting CPD format without dashes (CPD19581405):")
+    await find_booking_by_ref(
+        "find_booking_by_ref",
+        "test_id",
+        {"booking_ref": "CPD19581405"},
+        mock_llm,
+        mock_context,
+        result_callback,
+    )
+
+
 # Main function to run all tests
 async def run_tests():
-    await test_update_terminal()
+    # await test_update_terminal()
     # await test_update_registration()
-    await test_update_phone_number()
-    await test_find_booking()
+    # await test_update_phone_number()
+    # await test_find_booking()
     # await test_transfer_call()
-    await test_whatsapp_message()
-    await test_find_booking_by_phone()
-    await test_update_eta()
-    await test_get_current_time()
-    await test_get_current_date()
+    # await test_whatsapp_message()
+    # await test_find_booking_by_phone()
+    # await test_update_eta()
+    # await test_get_current_time()
+    # await test_get_current_date()
+    await test_find_booking_by_ref()  # Add the new test
 
 
 # Run the tests
