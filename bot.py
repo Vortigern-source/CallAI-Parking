@@ -4,7 +4,7 @@ import re
 import aiohttp
 import asyncio
 from loguru import logger
-import logging  # Add this import
+import logging
 
 from typing import List, Dict
 from dotenv import load_dotenv
@@ -13,7 +13,6 @@ from datetime import datetime
 from openai.types.chat import ChatCompletionToolParam
 
 # Pipecat imports
-# These imports are from the Pipecat library, which provides various components for building conversational AI pipelines
 from pipecat.frames.frames import (
     EndFrame,
     LLMMessagesFrame,
@@ -29,6 +28,7 @@ from pipecat.frames.frames import (
     BotSpeakingFrame,
     TTSAudioRawFrame,
     OutputAudioRawFrame,
+    TTSTextFrame,
 )
 
 from pipecat.services.openai import OpenAILLMContext
@@ -40,13 +40,9 @@ from pipecat.processors.aggregators.llm_response import (
     LLMUserResponseAggregator,
 )
 
-# Commented out unused imports
-# from pipecat.services.cartesia import CartesiaTTSService
-# from pipecat.services.elevenlabs import ElevenLabsTTSService
 from pipecat.services.openai import OpenAILLMService
 from pipecat.utils.text.markdown_text_filter import MarkdownTextFilter
 
-# from pipecat.services.openai_realtime_beta import OpenAILLMServiceRealtimeBeta
 from pipecat.services.deepgram import DeepgramSTTService
 from pipecat.transports.network.fastapi_websocket import (
     FastAPIWebsocketTransport,
@@ -59,7 +55,6 @@ from pipecat.serializers.twilio import TwilioFrameSerializer
 from deepgram import LiveOptions
 
 # Custom processors
-# These are custom-built processors for handling transcripts and debugging
 from custom_pipecat.custom_processors.transcripts_processor import (
     TranscriptCaptureProcessor,
     BotBufferProcessor,
@@ -111,9 +106,6 @@ from functions.whatsapp_message import whatsapp_message_extension
 # Define custom interruption processor
 from custom_pipecat.custom_processors.interruption_processor import InterruptionFrameProcessor
 
-# Add import at the top
-from custom_pipecat.custom_processors.audio_coordinator import AudioCoordinatorProcessor
-
 
 # Main function to run the bot
 async def run_bot(websocket_client, stream_sid, call_sid, call_info):
@@ -132,11 +124,6 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                             min_volume=0.3,
                             stop_secs=0.3,
                         )
-                        # params=VADParams( #VAD PARAMS - Need to test these.
-                        #     start_secs=0.15,
-                        #    stop_secs=0.7,
-                        #    min_volume=0.55,
-                        # ),
                     ),
                     vad_audio_passthrough=True,
                     serializer=TwilioFrameSerializer(stream_sid),
@@ -146,7 +133,6 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
 
             # Initialize OpenAI LLM service
             llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4o")
-            # sts = OpenAILLMServiceRealtimeBeta(api_key=os.getenv("OPENAI_API_KEY"))
 
             logger.debug("OpenAI LLM service initialized")
 
@@ -171,7 +157,6 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     model="nova-2-phonecall",
                     sample_rate=8000,
                     channels=2,
-                    # multichannel=True,
                     interim_results=True,
                     smart_format=True,
                     punctuate=True,
@@ -179,16 +164,6 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     vad_events=False,
                 ),
             )
-
-            # stt = GladiaSTTService(
-            #     api_key=os.getenv("GLADIA_API_KEY"),
-            #     sample_rate=8000,
-            #     encoding="mulaw",
-            # )
-            # stt = AzureSTTService(
-            #     api_key=os.getenv("AZURE_SPEECH_KEY"),
-            #     region=os.getenv("AZURE_SPEECH_REGION"),
-            # )
 
             # Initialize Cartesia TTS service
             tts = CartesiaTTSService(
@@ -198,22 +173,11 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                 text_filter=MarkdownTextFilter(),
             )
 
-            # tts = PlayHTTTSService(
-            #     user_id=os.getenv("PLAYHT_USER_ID"),
-            #     api_key=os.getenv("PLAYHT_API_KEY"),
-            #     voice_url="s3://voice-cloning-zero-shot/801a663f-efd0-4254-98d0-5c175514c3e8/jennifer/manifest.json",
-            #     params=PlayHTTTSService.InputParams(language=Language.EN),
-            # )
-
             # Initialize custom processors
             transcript_capture_processor = TranscriptCaptureProcessor()
             debugging_frame_processor = DebuggingFrameProcessor()
             bot_buffer_processor = BotBufferProcessor()
 
-            # tts = ElevenLabsTTSService(
-            #     api_key=os.getenv("ELEVENLABS_API_KEY", ""),
-            #     voice_id=os.getenv("ELEVENLABS_VOICE_ID", ""),
-            # )
             interruption_frame_processor = InterruptionFrameProcessor()
 
             tools = [
@@ -417,19 +381,17 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             ]
 
             # Define initial messages for the conversation
-            messages = [
-                {
-                    "role": "system",
-                    "content": params["prompts"]["assistant_prompt"],
-                }
-            ]
+            messages = [{"role": "system", "content": params["prompts"]["assistant_prompt"]}]
 
             # Add additional instruction to the system prompt
             messages[0]["content"] += (
                 "\n\nImportant: After finding a booking, always check the 'dropOffStatus' for drop-offs or 'collectionStatus' for collections. If the relevant status is 'Driver Requested', inform the customer that a driver has already been requested for their booking. Ask if they're calling about a different booking or if there's anything else you can help with."
             )
             messages[0]["content"] += (
-                "\n\nImportant: Ensure you look up the booking details for the customer's registration number right after saying 'I will now look up your booking details'."
+                "\n\nImportant: Ensure you look up the booking details for the customer's registration number right after saying 'I will look up your booking details'."
+            )
+            messages[0]["content"] += (
+                "\n\nRight after you say something like 'I'll now send a message to our team to request a driver for your drop-off.' Never go silent always be pro-active. So either instantly do the function call or confirm with the customer. "
             )
             context = OpenAILLMContext(messages, tools)
             context_aggregator = llm.create_context_aggregator(context)
@@ -444,16 +406,15 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     interruption_frame_processor,
                     context_aggregator.user(),  # User responses
                     llm,  # LLM
-                    bot_buffer_processor,  # Buffer responses
                     tts,  # Text-To-Speech
-                    AudioCoordinatorProcessor(),  # Using the improved version
                     transport.output(),  # Websocket output to client
+                    bot_buffer_processor,  # Add this line
                     context_aggregator.assistant(),  # LLM responses
-                    transcript_capture_processor,
+                    transcript_capture_processor,  # Add this line
                 ]
             )
 
-            # Create a pipeline task with specific parameters
+            # Create pipeline task before event handlers
             task = PipelineTask(
                 pipeline,
                 PipelineParams(
@@ -486,7 +447,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                 # Example of a log to test the configuration
                 logger.info(f"New call connected. Logs are written to {file_path}")
                 logger.info(f"Call from {call_info._from} to {call_info.to}")
-                # Send welcome message
+                # Send welcome message using queue manager
                 welcome_message = params["discussion"]["welcome_message"]
                 sentences_welcome_message = re.split(r"(?<=[.!?])\s+", welcome_message)
                 await tts.say(welcome_message)
@@ -518,5 +479,3 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             logger.exception(f"Error in run_bot: {str(e)}")
         finally:
             logger.info("Customer has ended call")
-            # Remove this line:
-            # logger.remove(f"file_{call_sid}")
