@@ -28,7 +28,6 @@ from pipecat.frames.frames import (
     BotSpeakingFrame,
     TTSAudioRawFrame,
     OutputAudioRawFrame,
-    TTSTextFrame,
 )
 
 from pipecat.services.openai import OpenAILLMContext
@@ -42,7 +41,8 @@ from pipecat.processors.aggregators.llm_response import (
 
 from pipecat.services.openai import OpenAILLMService
 from pipecat.utils.text.markdown_text_filter import MarkdownTextFilter
-
+from pipecat.services.cartesia import CartesiaTTSService
+from pipecat.transcriptions.language import Language
 from pipecat.services.deepgram import DeepgramSTTService
 from pipecat.transports.network.fastapi_websocket import (
     FastAPIWebsocketTransport,
@@ -60,9 +60,8 @@ from custom_pipecat.custom_processors.transcripts_processor import (
     BotBufferProcessor,
 )
 from custom_pipecat.custom_processors.debugging_processor import DebuggingFrameProcessor
+# from custom_pipecat.custom_audiofilters.krisp_filter import KrispFilter
 
-from pipecat.services.cartesia import CartesiaTTSService
-from pipecat.transcriptions.language import Language
 
 # Utility functions for reading parameters and handling file paths
 from utils.read_params import read_params
@@ -129,6 +128,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     ),
                     vad_audio_passthrough=True,
                     serializer=TwilioFrameSerializer(stream_sid),
+                    # audio_in_filter=KrispFilter(),
                 ),
             )
             logger.debug(f"Transport initialized for stream_sid: {stream_sid}")
@@ -174,7 +174,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             tts = CartesiaTTSService(
                 api_key=os.getenv("CARTESIA_API_KEY"),
                 voice_id="79a125e8-cd45-4c13-8a67-188112f4dd22",
-                output_format={"encoding": "pcm_mulaw", "sample_rate": 8000, "container": "raw"},
+                # output_format={"encoding": "pcm_mulaw", "sample_rate": 8000, "container": "raw"},
                 text_filter=MarkdownTextFilter(),
             )
 
@@ -413,7 +413,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                 "\n\nImportant: Ensure you look up the booking details for the customer's registration number right after saying 'I will look up your booking details'."
             )
             messages[0]["content"] += (
-                "\n\nRight after you say something like 'I'll now send a message to our team to request a driver for your drop-off.' Never go silent always be pro-active. So either instantly do the function call or confirm with the customer. "
+                "\n\nImportant: Right after you say something like 'I'll now send a message to our team to request a driver for your drop-off.' Never go silent always be pro-active. So either instantly do the function call or confirm with the customer. "
             )
             context = OpenAILLMContext(messages, tools)
             context_aggregator = llm.create_context_aggregator(context)
@@ -471,8 +471,10 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                 logger.info(f"Call from {call_info._from} to {call_info.to}")
                 # Send welcome message using queue manager
                 welcome_message = params["discussion"]["welcome_message"]
-                sentences_welcome_message = re.split(r"(?<=[.!?])\s+", welcome_message)
+                # sentences_welcome_message = re.split(r"(?<=[.!?])\s+", welcome_message)
+
                 await tts.say(welcome_message)
+                messages[0]["content"] += welcome_message
 
             # Define event handler for client disconnection
             @transport.event_handler("on_client_disconnected")

@@ -1,4 +1,5 @@
-pipecat-ai[daily,cartesia,openai,silero,deepgram]
+# pipecat-ai[daily,cartesia,openai,silero,deepgram]
+git+https://github.com/pipecat-ai/pipecat.git@aleix/input-queues-block-frames#egg=pipecat-ai[daily,cartesia,openai,silero,deepgram]
 fastapi
 uvicorn
 aiohttp
@@ -8,5 +9,6 @@ twilio
 requests
 loguru
 
-# git+https://github.com/KwalAI/kwal-pipecat.git@noisereduce#egg=pipecat-ai[noisereduce]
-# git+https://github.com/pipecat-ai/pipecat.git#egg=pipecat-ai[daily,cartesia,openai,silero,deepgram]
+
+# git+https://github.com/pipecat-ai/pipecat.git@EdgarMMProsper:edgar/llm-user-frame-processor
+# git+https://github.com/pipecat-ai/pipecat.git@aleix/input-queues-block-frames#egg=pipecat-ai[daily,cartesia,openai,silero,deepgram]
