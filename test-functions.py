@@ -197,16 +197,16 @@ async def test_find_booking_by_ref():
 
 # Main function to run all tests
 async def run_tests():
-    # await test_update_terminal()
-    # await test_update_registration()
-    # await test_update_phone_number()
-    # await test_find_booking()
+    await test_update_terminal()
+    await test_update_registration()
+    await test_update_phone_number()
+    await test_find_booking()
     # await test_transfer_call()
-    # await test_whatsapp_message()
-    # await test_find_booking_by_phone()
-    # await test_update_eta()
-    # await test_get_current_time()
-    # await test_get_current_date()
+    await test_whatsapp_message()
+    await test_find_booking_by_phone()
+    await test_update_eta()
+    await test_get_current_time()
+    await test_get_current_date()
     await test_find_booking_by_ref()  # Add the new test
 
 

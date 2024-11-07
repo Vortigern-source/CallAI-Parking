@@ -8,67 +8,89 @@ from .airtable_config import (
     AIRTABLE_BASE_ID,
     AIRTABLE_BOOKINGS_TABLE,
 )
-from .utils import format_registration
-from datetime import datetime
-
-
-def format_date_for_display(date_str, input_format="%d/%m/%Y %H:%M", output_format="%m/%d/%Y %I:%M %p"):
-    """Format date for display in messages"""
-    try:
-        date_obj = datetime.strptime(date_str, input_format)
-        return date_obj.strftime(output_format)
-    except ValueError:
-        return date_str
+from .utils import (
+    create_response,
+    format_registration,
+    format_date_for_display,
+    format_phone_for_display,
+    format_registration_for_display,
+)
 
 
 async def whatsapp_message(function_name, tool_call_id, arguments, llm, context, result_callback):
-    registration = arguments.get("registration")
-    is_drop_off = arguments.get("is_drop_off")
+    """
+    Send a WhatsApp message to notify staff about a booking that needs a driver.
+    Fetches fresh booking data from Airtable and includes any changed details inline.
+    """
+    try:
+        # Validate required arguments
+        if not arguments.get("registration") or "is_drop_off" not in arguments:
+            await result_callback(
+                create_response(False, "Registration and is_drop_off are required")
+            )
+            return
 
-    if is_drop_off is None:
-        await result_callback(json.dumps({"error": "is_drop_off parameter is required"}))
-        return
+        registration = arguments["registration"]
+        is_drop_off = arguments["is_drop_off"]
+        status_field = "Drop_Off_Status" if is_drop_off else "Collection_Status"
 
-    table_name = AIRTABLE_BOOKINGS_TABLE
-    twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-    twilio_whatsapp_number = os.getenv("TWILIO_WHATSAPP_NUMBER")
-    manager_whatsapp_group = os.getenv("MANAGER_WHATSAPP_GROUP")
+        # Validate environment variables
+        required_env_vars = [
+            ("TWILIO_ACCOUNT_SID", os.getenv("TWILIO_ACCOUNT_SID")),
+            ("TWILIO_AUTH_TOKEN", os.getenv("TWILIO_AUTH_TOKEN")),
+            ("TWILIO_WHATSAPP_NUMBER", os.getenv("TWILIO_WHATSAPP_NUMBER")),
+            ("MANAGER_WHATSAPP_GROUP", os.getenv("MANAGER_WHATSAPP_GROUP")),
+            ("AIRTABLE_API_KEY", AIRTABLE_API_KEY),
+            ("AIRTABLE_BASE_ID", AIRTABLE_BASE_ID),
+            ("AIRTABLE_BOOKINGS_TABLE", AIRTABLE_BOOKINGS_TABLE),
+        ]
 
-    formatted_registration = format_registration(registration)
+        missing_env_vars = [name for name, value in required_env_vars if not value]
+        if missing_env_vars:
+            error_msg = f"Missing required environment variables: {', '.join(missing_env_vars)}"
+            logger.error(error_msg)
+            await result_callback(create_response(False, error_msg))
+            return
 
-    airtable_url = (
-        f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{table_name}?"
-        f'filterByFormula=UPPER({{Registration}})=UPPER("{formatted_registration}")&'
-        f"cellFormat=string&timeZone=Europe/London&userLocale=en-gb"
-    )
+        formatted_registration = format_registration(registration)
 
-    headers = {"Authorization": f"Bearer {AIRTABLE_API_KEY}"}
+        # Get fresh data from Airtable
+        airtable_url = (
+            f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}?"
+            f'filterByFormula=UPPER({{Registration}})=UPPER("{formatted_registration}")&'
+            f"cellFormat=string&timeZone=Europe/London&userLocale=en-gb"
+        )
 
-    async with aiohttp.ClientSession() as session:
-        try:
+        headers = {"Authorization": f"Bearer {AIRTABLE_API_KEY}"}
+
+        async with aiohttp.ClientSession() as session:
             async with session.get(airtable_url, headers=headers) as response:
+                if response.status != 200:
+                    error_msg = f"Failed to fetch booking data: {await response.text()}"
+                    logger.error(error_msg)
+                    await result_callback(create_response(False, error_msg))
+                    return
+
                 airtable_data = await response.json()
 
-            if airtable_data["records"]:
+                if not airtable_data.get("records"):
+                    error_msg = f"No booking found for registration: {formatted_registration}"
+                    logger.warning(error_msg)
+                    await result_callback(create_response(False, error_msg))
+                    return
+
                 record = airtable_data["records"][0]["fields"]
 
                 # Check if a driver has already been requested
-                status_field = "Drop_Off_Status" if is_drop_off else "Collection_Status"
                 if record.get(status_field) == "Driver Requested":
-                    logger.info(
+                    msg = (
                         f"Driver already requested for booking: {record.get('Booking_Ref', 'N/A')}"
                     )
-                    await result_callback(
-                        json.dumps(
-                            {
-                                "success": "Driver already requested.",
-                                "is_drop_off": is_drop_off,
-                            }
-                        )
-                    )
+                    logger.info(msg)
+                    await result_callback(create_response(True, msg, {"is_drop_off": is_drop_off}))
                     return
 
+                # Extract booking details
                 booking_ref = record.get("Booking_Ref", "N/A")
                 vehicle_make = record.get("Vehicle_Make", "N/A")
                 name = record.get("Name", "N/A")
@@ -77,50 +99,40 @@ async def whatsapp_message(function_name, tool_call_id, arguments, llm, context,
                 terminal = record.get("Terminal", "N/A")
                 estimated_eta = record.get("Current_ETA", "N/A")
                 allocated_car_park = record.get("Allocated_Car_Park", "N/A")
-                old_terminal = record.get("Old_Terminal", "N/A")
-                old_registration = record.get("Old_Registration", "N/A")
-                old_phone_number = record.get("Old_Phone_Number", "N/A")
+
+                # Format fields for display
+                registration_text = format_registration_for_display(registration)
+                contact_text = format_phone_for_display(contact_number)
+                display_entry_time = format_date_for_display(entry_date_time)
+                display_eta = estimated_eta
+                if estimated_eta != "Customer has collected luggage":
+                    display_eta = format_date_for_display(estimated_eta)
 
                 booking_type = "Car Drop-off" if is_drop_off else "Car Collection"
-
                 message = f"""
 New Booking - {booking_type}:
 - Booking Reference: {booking_ref}
-- Vehicle: {vehicle_make} ({registration})
+- Vehicle: {vehicle_make} ({registration_text})
 - Customer Name: {name}
-- Contact Number: {contact_number}
-- {"Drop-off" if is_drop_off else "Collection"} Date/Time: {format_date_for_display(entry_date_time)}
-- Estimated {"Drop-off" if is_drop_off else "Arrival"} Time: {estimated_eta if is_drop_off else "Customer has collected luggage"}
+- Contact Number: {contact_text}
+- {"Drop-off" if is_drop_off else "Collection"} Date/Time: {display_entry_time}
+- Estimated {"Drop-off" if is_drop_off else "Arrival"} Time: {display_eta}
 - Terminal: {terminal}
 - Allocated Car Park: {allocated_car_park}
+
+Action Required: Please assign a driver for this {"drop-off" if is_drop_off else "collection"}.
 """
-
-                # Add changes section only if there are changes
-                changes = []
-                if old_terminal and old_terminal != terminal:
-                    changes.append(f"- Terminal changed from {old_terminal} to {terminal}")
-                if old_registration and old_registration != registration:
-                    changes.append(
-                        f"- Registration changed from {old_registration} to {registration}"
-                    )
-                if old_phone_number and old_phone_number != contact_number:
-                    changes.append(
-                        f"- Phone number changed from {old_phone_number} to {contact_number}"
-                    )
-                if changes:
-                    message += "\nRecent Changes:\n" + "\n".join(changes)
-
-                message += f'\nAction Required: Please assign a driver for this {"drop-off" if is_drop_off else "collection"}.'
 
                 logger.debug(f"WhatsApp message content: {message}")
 
-                twilio_url = (
-                    f"https://api.twilio.com/2010-04-01/Accounts/{twilio_account_sid}/Messages.json"
+                # Send WhatsApp message
+                twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{os.getenv('TWILIO_ACCOUNT_SID')}/Messages.json"
+                auth = aiohttp.BasicAuth(
+                    os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN")
                 )
-                auth = aiohttp.BasicAuth(twilio_account_sid, twilio_auth_token)
                 data = {
-                    "From": f"whatsapp:{twilio_whatsapp_number}",
-                    "To": f"whatsapp:{manager_whatsapp_group}",
+                    "From": f"whatsapp:{os.getenv('TWILIO_WHATSAPP_NUMBER')}",
+                    "To": f"whatsapp:{os.getenv('MANAGER_WHATSAPP_GROUP')}",
                     "Body": message,
                 }
 
@@ -132,111 +144,119 @@ New Booking - {booking_type}:
                 ) as twilio_response:
                     twilio_data = await twilio_response.json()
 
-                if twilio_response.status == 201:
+                    if twilio_response.status != 201:
+                        error_msg = f"Failed to send WhatsApp message: {twilio_data.get('message', 'Unknown error')}"
+                        logger.error(error_msg)
+                        await result_callback(create_response(False, error_msg))
+                        return
+
+                    # Update Airtable status
+                    patch_url = (
+                        f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}"
+                    )
+                    patch_data = {
+                        "records": [
+                            {
+                                "id": airtable_data["records"][0]["id"],
+                                "fields": {status_field: "Driver Requested"},
+                            }
+                        ],
+                        "typecast": True,
+                    }
+
+                    async with session.patch(
+                        patch_url, headers=headers, json=patch_data
+                    ) as patch_response:
+                        if patch_response.status != 200:
+                            logger.error(f"Failed to update {status_field}")
+                            # Don't return error since message was sent successfully
+                        else:
+                            logger.info(f"Updated {status_field} to Driver Requested")
+
+                    # Return success response
+                    success_msg = "Manager notified successfully."
                     if "sid" in twilio_data:
                         logger.info(f'WhatsApp message sent successfully: {twilio_data["sid"]}')
                         await result_callback(
-                            json.dumps(
+                            create_response(
+                                True,
+                                success_msg,
                                 {
-                                    "success": "Manager notified successfully.",
                                     "messageId": twilio_data["sid"],
                                     "is_drop_off": is_drop_off,
-                                }
+                                },
                             )
                         )
                     else:
                         logger.warning("WhatsApp message sent, but no SID returned")
                         await result_callback(
-                            json.dumps(
+                            create_response(
+                                True,
+                                success_msg,
                                 {
-                                    "success": "Manager notified, but no message ID available.",
                                     "is_drop_off": is_drop_off,
-                                }
+                                },
                             )
                         )
-                else:
-                    error_message = twilio_data.get("message", "Unknown error")
-                    logger.error(f"Failed to send WhatsApp message: {error_message}")
-                    await result_callback(
-                        json.dumps({"error": f"Failed to send WhatsApp message: {error_message}"})
-                    )
 
-                # Update the status in Airtable
-                status_field = "Drop_Off_Status" if is_drop_off else "Collection_Status"
-                status_value = "Driver Requested"
-                eta_value = estimated_eta if is_drop_off else "Customer has collected luggage"
-
-                patch_url = (
-                    f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}"
-                )
-                patch_data = {
-                    "records": [
-                        {
-                            "id": airtable_data["records"][0]["id"],
-                            "fields": {status_field: status_value, "Current_ETA": eta_value},
-                        }
-                    ],
-                    "typecast": True,
-                }
-
-                async with session.patch(
-                    patch_url, headers=headers, json=patch_data
-                ) as patch_response:
-                    if patch_response.status == 200:
-                        logger.info(
-                            f"Updated {status_field} to {status_value} and Current_ETA to {eta_value}"
-                        )
-                    else:
-                        logger.error(f"Failed to update {status_field} and Current_ETA")
-
-            else:
-                logger.warning(f"No booking found for registration: {formatted_registration}")
-                await result_callback(
-                    json.dumps({"error": "No booking found for this registration number."})
-                )
-        except Exception as error:
-            logger.error(f"Error in whatsappMessage function: {str(error)}")
-            await result_callback(
-                json.dumps({"error": "Failed to process the request.", "details": str(error)})
-            )
-
-
-# Add this new function to the existing whatsapp_message.py file
+    except Exception as error:
+        error_msg = f"Error in whatsappMessage function: {str(error)}"
+        logger.error(error_msg)
+        await result_callback(create_response(False, error_msg))
 
 
 async def whatsapp_message_extension(
     function_name, tool_call_id, booking_details, llm, context, result_callback
 ):
-    twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-    twilio_whatsapp_number = os.getenv("TWILIO_WHATSAPP_NUMBER")
-    manager_whatsapp_group = os.getenv("MANAGER_WHATSAPP_GROUP")
+    """Send a WhatsApp message to notify staff about a booking that needs extension."""
+    try:
+        # Validate environment variables
+        required_env_vars = [
+            ("TWILIO_ACCOUNT_SID", os.getenv("TWILIO_ACCOUNT_SID")),
+            ("TWILIO_AUTH_TOKEN", os.getenv("TWILIO_AUTH_TOKEN")),
+            ("TWILIO_WHATSAPP_NUMBER", os.getenv("TWILIO_WHATSAPP_NUMBER")),
+            ("MANAGER_WHATSAPP_GROUP", os.getenv("MANAGER_WHATSAPP_GROUP")),
+        ]
 
-    message = f"""
+        missing_env_vars = [name for name, value in required_env_vars if not value]
+        if missing_env_vars:
+            error_msg = f"Missing required environment variables: {', '.join(missing_env_vars)}"
+            logger.error(error_msg)
+            await result_callback(create_response(False, error_msg))
+            return
+
+        # Format fields for display
+        registration = booking_details.get("registration", "N/A")
+        contact_number = booking_details.get("contactNumber", "N/A")
+        end_date = booking_details.get("endDate", "N/A")
+
+        registration_display = format_registration_for_display(registration)
+        contact_display = format_phone_for_display(contact_number)
+
+        message = f"""
 Booking Extension Required:
 - Booking Reference: {booking_details.get('bookingRef', 'N/A')}
-- Vehicle: {booking_details.get('vehicleMake', 'N/A')} ({booking_details.get('registration', 'N/A')})
+- Vehicle: {booking_details.get('vehicleMake', 'N/A')} ({registration_display})
 - Customer Name: {booking_details.get('customerName', 'N/A')}
-- Contact Number: {booking_details.get('contactNumber', 'N/A')}
-- Original End Date/Time: {booking_details.get('endDate', 'N/A')}
+- Contact Number: {contact_display}
+- Original End Date/Time: {end_date}
 - Terminal: {booking_details.get('terminal', 'N/A')}
 - Allocated Car Park: {booking_details.get('allocatedCarPark', 'N/A')}
 
 This customer's booking has expired, and they wish to extend it. Please contact the customer to arrange the extension and additional payment.
 """
 
-    logger.debug(f"WhatsApp message content for extension: {message}")
+        logger.debug(f"WhatsApp message content for extension: {message}")
 
-    twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_account_sid}/Messages.json"
-    auth = aiohttp.BasicAuth(twilio_account_sid, twilio_auth_token)
-    data = {
-        "From": f"whatsapp:{twilio_whatsapp_number}",
-        "To": f"whatsapp:{manager_whatsapp_group}",
-        "Body": message,
-    }
+        twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{os.getenv('TWILIO_ACCOUNT_SID')}/Messages.json"
+        auth = aiohttp.BasicAuth(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
+        data = {
+            "From": f"whatsapp:{os.getenv('TWILIO_WHATSAPP_NUMBER')}",
+            "To": f"whatsapp:{os.getenv('MANAGER_WHATSAPP_GROUP')}",
+            "Body": message,
+        }
 
-    async with aiohttp.ClientSession() as session:
-        try:
+        async with aiohttp.ClientSession() as session:
             async with session.post(
                 twilio_url,
                 auth=auth,
@@ -245,40 +265,32 @@ This customer's booking has expired, and they wish to extend it. Please contact 
             ) as twilio_response:
                 twilio_data = await twilio_response.json()
 
-            if twilio_response.status == 201:
+                if twilio_response.status != 201:
+                    error_msg = f"Failed to send WhatsApp message for extension: {twilio_data.get('message', 'Unknown error')}"
+                    logger.error(error_msg)
+                    await result_callback(create_response(False, error_msg))
+                    return
+
+                # Return success response
+                success_msg = "Manager notified about booking extension."
                 if "sid" in twilio_data:
                     logger.info(
                         f'WhatsApp message for extension sent successfully: {twilio_data["sid"]}'
                     )
                     await result_callback(
-                        json.dumps(
+                        create_response(
+                            True,
+                            success_msg,
                             {
-                                "success": "Manager notified about booking extension.",
                                 "messageId": twilio_data["sid"],
-                            }
+                            },
                         )
                     )
                 else:
                     logger.warning("WhatsApp message for extension sent, but no SID returned")
-                    await result_callback(
-                        json.dumps(
-                            {
-                                "success": "Manager notified about booking extension, but no message ID available.",
-                            }
-                        )
-                    )
-            else:
-                error_message = twilio_data.get("message", "Unknown error")
-                logger.error(f"Failed to send WhatsApp message for extension: {error_message}")
-                await result_callback(
-                    json.dumps(
-                        {"error": f"Failed to send WhatsApp message for extension: {error_message}"}
-                    )
-                )
-        except Exception as error:
-            logger.error(f"Error in whatsappMessageExtension function: {str(error)}")
-            await result_callback(
-                json.dumps(
-                    {"error": "Failed to process the extension request.", "details": str(error)}
-                )
-            )
+                    await result_callback(create_response(True, success_msg))
+
+    except Exception as error:
+        error_msg = f"Error in whatsappMessageExtension function: {str(error)}"
+        logger.error(error_msg)
+        await result_callback(create_response(False, error_msg))

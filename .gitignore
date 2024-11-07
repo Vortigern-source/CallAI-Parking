@@ -7,3 +7,5 @@
 /venv
 custom_pipecat/templates/streams.xml
 *.xml
+*.pyc
+/functions/__pycache__

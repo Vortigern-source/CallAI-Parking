@@ -4,7 +4,7 @@ from datetime import datetime
 from loguru import logger
 import aiohttp
 from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
-from .utils import format_registration
+from .utils import create_response, format_registration
 
 
 async def update_vehicle_details(
@@ -12,6 +12,10 @@ async def update_vehicle_details(
 ):
     registration = arguments.get("registration")
     vehicle_details = arguments.get("vehicle_details")
+
+    if not vehicle_details:
+        await result_callback(create_response(False, "Vehicle details cannot be empty"))
+        return
 
     timezone = pytz.timezone("Europe/London")
     current_time = datetime.now(timezone)
@@ -39,7 +43,7 @@ async def update_vehicle_details(
                             f"No booking found for registration: {formatted_registration}"
                         )
                         await result_callback(
-                            json.dumps({"error": "No booking found for this registration number."})
+                            create_response(False, "No booking found for this registration number.")
                         )
                         return
 
@@ -63,38 +67,37 @@ async def update_vehicle_details(
                                 f"Vehicle details updated successfully. New details: {vehicle_details}"
                             )
                             await result_callback(
-                                json.dumps(
+                                create_response(
+                                    True,
+                                    "Vehicle details updated successfully.",
                                     {
-                                        "success": "Vehicle details updated successfully.",
                                         "updatedRecord": patch_data["records"][0],
                                         "updatedVehicleDetails": vehicle_details,
-                                    }
+                                    },
                                 )
                             )
                         else:
                             error_text = await patch_response.text()
                             logger.error(f"Error updating vehicle details: {error_text}")
                             await result_callback(
-                                json.dumps(
-                                    {
-                                        "error": "Failed to update vehicle details.",
-                                        "details": error_text,
-                                    }
+                                create_response(
+                                    False,
+                                    "Failed to update vehicle details.",
+                                    {"details": error_text},
                                 )
                             )
                 else:
                     error_text = await response.text()
                     logger.error(f"Error response from Airtable: {response.status}")
                     await result_callback(
-                        json.dumps(
-                            {
-                                "error": f"Failed to find booking. Status: {response.status}",
-                                "details": error_text,
-                            }
+                        create_response(
+                            False,
+                            f"Failed to find booking. Status: {response.status}",
+                            {"details": error_text},
                         )
                     )
         except Exception as error:
             logger.error(f"Error updating vehicle details: {str(error)}")
             await result_callback(
-                json.dumps({"error": "Failed to update vehicle details.", "details": str(error)})
+                create_response(False, "Failed to update vehicle details.", {"details": str(error)})
             )

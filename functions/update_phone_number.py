@@ -37,6 +37,9 @@ async def update_phone_number(
 
     # Clean the phone number
     cleaned_phone_number = clean_phone_number(phone_number)
+    if not cleaned_phone_number:
+        await result_callback(create_response(False, "Invalid phone number format"))
+        return
 
     timezone = pytz.timezone("Europe/London")
     current_time = datetime.now(timezone)
@@ -64,7 +67,7 @@ async def update_phone_number(
                             f"No booking found for registration: {formatted_registration}"
                         )
                         await result_callback(
-                            json.dumps({"error": "No booking found for this registration number."})
+                            create_response(False, "No booking found for this registration number.")
                         )
                         return
 
@@ -90,34 +93,31 @@ async def update_phone_number(
                                 f"Phone number updated successfully. New number: {cleaned_phone_number}"
                             )
                             await result_callback(
-                                json.dumps(
+                                create_response(
+                                    True,
+                                    "Phone number updated successfully.",
                                     {
-                                        "success": "Phone number updated successfully.",
                                         "updatedRecord": patch_data["records"][0],
                                         "updatedPhoneNumber": cleaned_phone_number,
-                                    }
+                                    },
                                 )
                             )
                         else:
                             error_text = await patch_response.text()
                             logger.error(f"Error updating phone number: {error_text}")
                             await result_callback(
-                                json.dumps(
-                                    {
-                                        "error": "Failed to update phone number.",
-                                        "details": error_text,
-                                    }
+                                create_response(
+                                    False, "Failed to update phone number.", {"details": error_text}
                                 )
                             )
                 else:
                     error_text = await response.text()
                     logger.error(f"Error response from Airtable: {response.status}")
                     await result_callback(
-                        json.dumps(
-                            {
-                                "error": f"Failed to find booking. Status: {response.status}",
-                                "details": error_text,
-                            }
+                        create_response(
+                            False,
+                            f"Failed to find booking. Status: {response.status}",
+                            {"details": error_text},
                         )
                     )
         except Exception as error:

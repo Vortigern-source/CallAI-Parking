@@ -3,11 +3,8 @@ import pytz
 import aiohttp
 from datetime import datetime
 from loguru import logger
-from .constants import VALID_TERMINALS
 from .utils import create_response, format_registration
 from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
-from .whatsapp_message import whatsapp_message
-import json
 
 
 async def update_terminal(function_name, tool_call_id, arguments, llm, context, result_callback):
@@ -53,7 +50,7 @@ async def update_terminal(function_name, tool_call_id, arguments, llm, context, 
                             f"No booking found for registration: {formatted_registration}"
                         )
                         await result_callback(
-                            json.dumps({"error": "No booking found for this registration number."})
+                            create_response(False, "No booking found for this registration number.")
                         )
                         return
 
@@ -75,48 +72,35 @@ async def update_terminal(function_name, tool_call_id, arguments, llm, context, 
                             patch_data = await patch_response.json()
                             logger.info(f"Terminal updated successfully. New terminal: {terminal}")
                             await result_callback(
-                                json.dumps(
+                                create_response(
+                                    True,
+                                    "Terminal updated successfully.",
                                     {
-                                        "success": "Terminal updated successfully.",
                                         "updatedRecord": patch_data["records"][0],
                                         "updatedTerminal": terminal,
-                                    }
+                                    },
                                 )
-                            )
-
-                            # Update this part
-                            await whatsapp_message(
-                                "whatsapp_message",
-                                tool_call_id,
-                                {
-                                    "registration": formatted_registration,
-                                    "is_drop_off": True,
-                                },
-                                llm,
-                                context,
-                                result_callback,
                             )
                         else:
                             error_text = await patch_response.text()
                             logger.error(f"Error updating terminal: {error_text}")
                             await result_callback(
-                                json.dumps(
-                                    {"error": "Failed to update terminal.", "details": error_text}
+                                create_response(
+                                    False, "Failed to update terminal.", {"details": error_text}
                                 )
                             )
                 else:
                     error_text = await response.text()
                     logger.error(f"Error response from Airtable: {response.status}")
                     await result_callback(
-                        json.dumps(
-                            {
-                                "error": f"Failed to find booking. Status: {response.status}",
-                                "details": error_text,
-                            }
+                        create_response(
+                            False,
+                            f"Failed to find booking. Status: {response.status}",
+                            {"details": error_text},
                         )
                     )
         except Exception as error:
             logger.error(f"Error updating terminal: {str(error)}")
             await result_callback(
-                json.dumps({"error": "Failed to update terminal.", "details": str(error)})
+                create_response(False, "Failed to update terminal.", {"details": str(error)})
             )

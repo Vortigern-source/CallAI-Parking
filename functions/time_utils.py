@@ -1,10 +1,11 @@
 import pytz
 from datetime import datetime, timedelta
 import re
-import json
+from .utils import create_response
 
 
 def get_current_time():
+    """Get current time in UK timezone formatted for TTS (HH:MM AM/PM)"""
     utc_now = datetime.now(pytz.utc)
     uk_tz = pytz.timezone("Europe/London")
     uk_time = utc_now.astimezone(uk_tz)
@@ -15,11 +16,18 @@ def get_current_time():
 async def handle_get_current_time(
     function_name, tool_call_id, arguments, llm, context, result_callback
 ):
-    current_time_info = get_current_time()
-    await result_callback(json.dumps(current_time_info))
+    """Handle getting current time in UK timezone"""
+    try:
+        current_time_info = get_current_time()
+        await result_callback(create_response(True, "Current time retrieved.", current_time_info))
+    except Exception as error:
+        await result_callback(
+            create_response(False, "Failed to get current time.", {"details": str(error)})
+        )
 
 
 def get_current_date():
+    """Get current date in UK timezone formatted for TTS (MM/DD/YYYY)"""
     utc_now = datetime.now(pytz.utc)
     uk_tz = pytz.timezone("Europe/London")
     uk_date = utc_now.astimezone(uk_tz)
@@ -30,34 +38,15 @@ def get_current_date():
 async def handle_get_current_date(
     function_name, tool_call_id, arguments, llm, context, result_callback
 ):
-    current_date_info = get_current_date()
-    await result_callback(json.dumps(current_date_info))
-
-
-def parse_eta(eta_string, current_time, timezone):
-    relative_regex = r"(\d+)\s*(minutes?|hours?)"
-    match = re.match(relative_regex, eta_string, re.IGNORECASE)
-    if match:
-        value = int(match.group(1))
-        unit = "hours" if match.group(2).lower().startswith("hour") else "minutes"
-        return current_time + timedelta(**{unit: value})
-
+    """Handle getting current date in UK timezone"""
     try:
-        parsed_time = datetime.strptime(eta_string, "%I:%M %p").time()
-        eta_datetime = datetime.combine(current_time.date(), parsed_time)
-        if parsed_time < current_time.time():
-            eta_datetime += timedelta(days=1)
-        return timezone.localize(eta_datetime)
-    except ValueError:
-        pass
+        current_date_info = get_current_date()
+        await result_callback(create_response(True, "Current date retrieved.", current_date_info))
+    except Exception as error:
+        await result_callback(
+            create_response(False, "Failed to get current date.", {"details": str(error)})
+        )
 
-    try:
-        parsed_time = datetime.strptime(eta_string, "%H:%M").time()
-        eta_datetime = datetime.combine(current_time.date(), parsed_time)
-        if parsed_time < current_time.time():
-            eta_datetime += timedelta(days=1)
-        return timezone.localize(eta_datetime)
-    except ValueError:
-        pass
 
-    return None
+# Note: parse_eta has been moved to utils.py to avoid duplication
+# and maintain consistency across the application

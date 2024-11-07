@@ -425,12 +425,12 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                 [
                     transport.input(),  # Websocket input from client
                     stt,  # Speech-To-Text
-                    interruption_frame_processor,
+                    # interruption_frame_processor,
                     context_aggregator.user(),  # User responses
                     llm,  # LLM
                     tts,  # Text-To-Speech
                     transport.output(),  # Websocket output to client
-                    bot_buffer_processor,  # Add this line
+                    # bot_buffer_processor,  # Add this line
                     context_aggregator.assistant(),  # LLM responses
                     transcript_capture_processor,  # Add this line
                 ]
