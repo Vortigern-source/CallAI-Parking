@@ -17,12 +17,22 @@ from .utils import (
 )
 
 
+def clean_phone_number(phone):
+    """Remove any formatting from phone number"""
+    if not phone:
+        return None
+    return "".join(filter(str.isdigit, str(phone)))
+
+
 async def whatsapp_message(function_name, tool_call_id, arguments, llm, context, result_callback):
     """
     Send a WhatsApp message to notify staff about a booking that needs a driver.
     Fetches fresh booking data from Airtable and includes any changed details inline.
     """
     try:
+        # Log the received context
+        logger.debug(f"Received context in whatsapp_message: {context}")
+
         # Validate required arguments
         if not arguments.get("registration") or "is_drop_off" not in arguments:
             await result_callback(
@@ -101,12 +111,30 @@ async def whatsapp_message(function_name, tool_call_id, arguments, llm, context,
                 allocated_car_park = record.get("Allocated_Car_Park", "N/A")
 
                 # Format fields for display
-                registration_text = format_registration_for_display(registration)
-                contact_text = format_phone_for_display(contact_number)
+                registration_text = registration.replace("-", "")  # Remove dashes from registration
+                contact_text = contact_number  # Use raw phone number without formatting
                 display_entry_time = format_date_for_display(entry_date_time)
                 display_eta = estimated_eta
                 if estimated_eta != "Customer has collected luggage":
                     display_eta = format_date_for_display(estimated_eta)
+
+                # Check for old phone number in context
+                if context and isinstance(context, dict):
+                    old_phone = context.get("oldPhoneNumber")
+                    new_phone = context.get("updatedPhoneNumber")
+                    logger.debug(f"Phone number comparison - Old: {old_phone}, New: {new_phone}")
+
+                    # Clean phone numbers for comparison
+                    clean_old = clean_phone_number(old_phone)
+                    clean_new = clean_phone_number(new_phone)
+
+                    if clean_old and clean_new and clean_old != clean_new:
+                        contact_text = f"{new_phone} (Changed from {old_phone} to {new_phone})"
+                        logger.debug(f"Updated contact_text with change message: {contact_text}")
+                    else:
+                        logger.debug(
+                            f"Phone numbers are the same after cleaning: {clean_old} = {clean_new}"
+                        )
 
                 booking_type = "Car Drop-off" if is_drop_off else "Car Collection"
                 message = f"""
@@ -230,8 +258,8 @@ async def whatsapp_message_extension(
         contact_number = booking_details.get("contactNumber", "N/A")
         end_date = booking_details.get("endDate", "N/A")
 
-        registration_display = format_registration_for_display(registration)
-        contact_display = format_phone_for_display(contact_number)
+        registration_display = registration.replace("-", "")  # Remove dashes from registration
+        contact_display = contact_number  # Use raw phone number without formatting
 
         message = f"""
 Booking Extension Required:

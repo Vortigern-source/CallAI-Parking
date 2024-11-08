@@ -73,14 +73,16 @@ async def update_phone_number(
 
                     record = data["records"][0]
                     record_id = record["id"]
+                    current_phone = record["fields"].get("Contact_Number")
+
+                    # Store both old and new numbers for comparison
+                    fields = {"Contact_Number": cleaned_phone_number}
 
                     patch_url = (
                         f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}"
                     )
                     patch_data = {
-                        "records": [
-                            {"id": record_id, "fields": {"Contact_Number": cleaned_phone_number}}
-                        ],
+                        "records": [{"id": record_id, "fields": fields}],
                         "typecast": True,
                     }
 
@@ -92,16 +94,19 @@ async def update_phone_number(
                             logger.info(
                                 f"Phone number updated successfully. New number: {cleaned_phone_number}"
                             )
-                            await result_callback(
-                                create_response(
-                                    True,
-                                    "Phone number updated successfully.",
-                                    {
-                                        "updatedRecord": patch_data["records"][0],
-                                        "updatedPhoneNumber": cleaned_phone_number,
-                                    },
-                                )
+                            # Return both old and new phone numbers
+                            response = create_response(
+                                True,
+                                "Phone number updated successfully.",
+                                {
+                                    "oldPhoneNumber": current_phone,
+                                    "updatedPhoneNumber": cleaned_phone_number,
+                                    "updatedRecord": patch_data["records"][0],
+                                },
                             )
+                            logger.debug(f"Response data: {response}")
+                            await result_callback(response)
+                            return response
                         else:
                             error_text = await patch_response.text()
                             logger.error(f"Error updating phone number: {error_text}")

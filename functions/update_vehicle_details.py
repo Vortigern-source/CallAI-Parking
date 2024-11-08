@@ -49,12 +49,19 @@ async def update_vehicle_details(
 
                     record = data["records"][0]
                     record_id = record["id"]
+                    current_vehicle = record["fields"].get("Vehicle_Make")
+
+                    # Only mark as changed if the vehicle details are actually different
+                    fields = {"Vehicle_Make": vehicle_details}
+                    if current_vehicle and current_vehicle != vehicle_details:
+                        fields["Vehicle_Changed"] = True
+                        fields["Old_Vehicle_Make"] = current_vehicle
 
                     patch_url = (
                         f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}"
                     )
                     patch_data = {
-                        "records": [{"id": record_id, "fields": {"Vehicle_Make": vehicle_details}}],
+                        "records": [{"id": record_id, "fields": fields}],
                         "typecast": True,
                     }
 

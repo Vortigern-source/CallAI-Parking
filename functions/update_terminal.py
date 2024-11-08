@@ -56,12 +56,19 @@ async def update_terminal(function_name, tool_call_id, arguments, llm, context, 
 
                     record = data["records"][0]
                     record_id = record["id"]
+                    current_terminal = record["fields"].get("Terminal")
+
+                    # Only mark as changed if the terminal is actually different
+                    fields = {"Terminal": formatted_terminal}
+                    if current_terminal and current_terminal != formatted_terminal:
+                        fields["Terminal_Changed"] = True
+                        fields["Old_Terminal"] = current_terminal
 
                     patch_url = (
                         f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}"
                     )
                     patch_data = {
-                        "records": [{"id": record_id, "fields": {"Terminal": formatted_terminal}}],
+                        "records": [{"id": record_id, "fields": fields}],
                         "typecast": True,
                     }
 
