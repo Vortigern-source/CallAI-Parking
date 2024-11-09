@@ -53,9 +53,19 @@ async def find_booking(function_name, tool_call_id, arguments, llm, context, res
                                 and start_date <= current_time <= end_date + timedelta(hours=24)
                             )
 
-                            # Format dates for display (MM/DD/YYYY)
+                            # Format dates for display (MM/DD/YYYY HH:MM AM/PM)
                             display_start_date = format_date_for_display(record["Entry_Date_Time"])
                             display_end_date = format_date_for_display(record["Return_Date_Time"])
+
+                            # Get ETA and format appropriately
+                            estimated_eta = record.get("Current_ETA", "N/A")
+                            if not is_drop_off:
+                                # For collections, if ETA is N/A, set it to "Customer has collected luggage"
+                                if estimated_eta == "N/A":
+                                    estimated_eta = "Customer has collected luggage"
+                            elif estimated_eta != "Customer has collected luggage":
+                                # For drop-offs, format the ETA if it's not the special message
+                                estimated_eta = format_date_for_display(estimated_eta)
 
                             # Store initial details
                             initial_details = {
@@ -71,6 +81,7 @@ async def find_booking(function_name, tool_call_id, arguments, llm, context, res
                                 "vehicleMake": record.get("Vehicle_Make", "Not provided"),
                                 "dropOffStatus": record.get("Drop_Off_Status", "Not Set"),
                                 "collectionStatus": record.get("Collection_Status", "Not Set"),
+                                "currentETA": estimated_eta,
                             }
 
                             result = {
@@ -87,6 +98,7 @@ async def find_booking(function_name, tool_call_id, arguments, llm, context, res
                                 "vehicleMake": initial_details["vehicleMake"],
                                 "dropOffStatus": initial_details["dropOffStatus"],
                                 "collectionStatus": initial_details["collectionStatus"],
+                                "currentETA": initial_details["currentETA"],
                             }
 
                             await result_callback(create_response(True, "Booking found.", result))
