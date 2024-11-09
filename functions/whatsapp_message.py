@@ -147,9 +147,14 @@ async def whatsapp_message(function_name, tool_call_id, arguments, llm, context,
                 registration_text = registration.replace("-", "")  # Remove dashes from registration
                 contact_text = contact_number  # Use raw phone number without formatting
                 display_entry_time = format_date_for_display(entry_date_time)
-                display_eta = estimated_eta
-                if estimated_eta != "Customer has collected luggage":
+
+                # Handle ETA display
+                if not is_drop_off and estimated_eta == "N/A":
+                    display_eta = "Customer has collected luggage"
+                elif estimated_eta != "Customer has collected luggage":
                     display_eta = format_date_for_display(estimated_eta)
+                else:
+                    display_eta = estimated_eta
 
                 # Compare with initial details if available
                 changes = []
