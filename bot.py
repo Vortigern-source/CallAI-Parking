@@ -415,6 +415,12 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             messages[0]["content"] += (
                 "\n\nImportant: Right after you say something like 'I'll now send a message to our team to request a driver for your drop-off.' Never go silent always be pro-active. So either instantly do the function call or confirm with the customer. "
             )
+            messages[0]["content"] += (
+                "\n\nImportant: If the lookup fails make sure to tell the customer what you looked up so they can correct you."
+            )
+            messages[0]["content"] += (
+                "\n\nImportant: WHEN CONFIRMING BOOKING DETAILS WITH CUSTOMER ALWAYS ENSURE YOU CONFIRM THE DATE AND TIME OF THE BOOKING, NOT JUST THE DATE"
+            )
             context = OpenAILLMContext(messages, tools)
             context_aggregator = llm.create_context_aggregator(context)
 

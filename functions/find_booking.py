@@ -57,10 +57,8 @@ async def find_booking(function_name, tool_call_id, arguments, llm, context, res
                             display_start_date = format_date_for_display(record["Entry_Date_Time"])
                             display_end_date = format_date_for_display(record["Return_Date_Time"])
 
-                            result = {
-                                "found": True,
-                                "expired": not is_active,
-                                "is_drop_off": is_drop_off,
+                            # Store initial details
+                            initial_details = {
                                 "customerName": record.get("Name", "Not provided"),
                                 "terminal": record.get("Terminal", "Not provided"),
                                 "startDate": display_start_date,
@@ -73,6 +71,22 @@ async def find_booking(function_name, tool_call_id, arguments, llm, context, res
                                 "vehicleMake": record.get("Vehicle_Make", "Not provided"),
                                 "dropOffStatus": record.get("Drop_Off_Status", "Not Set"),
                                 "collectionStatus": record.get("Collection_Status", "Not Set"),
+                            }
+
+                            result = {
+                                "found": True,
+                                "expired": not is_active,
+                                "is_drop_off": is_drop_off,
+                                "customerName": initial_details["customerName"],
+                                "terminal": initial_details["terminal"],
+                                "startDate": initial_details["startDate"],
+                                "endDate": initial_details["endDate"],
+                                "contactNumber": initial_details["contactNumber"],
+                                "allocatedCarPark": initial_details["allocatedCarPark"],
+                                "registration": initial_details["registration"],
+                                "vehicleMake": initial_details["vehicleMake"],
+                                "dropOffStatus": initial_details["dropOffStatus"],
+                                "collectionStatus": initial_details["collectionStatus"],
                             }
 
                             await result_callback(create_response(True, "Booking found.", result))

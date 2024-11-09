@@ -21,17 +21,41 @@ def clean_phone_number(phone):
     """Remove any formatting from phone number"""
     if not phone:
         return None
-    return "".join(filter(str.isdigit, str(phone)))
+    # Remove all non-digit characters
+    cleaned = "".join(filter(str.isdigit, str(phone)))
+    # Handle international format
+    if cleaned.startswith("44"):
+        cleaned = "0" + cleaned[2:]
+    elif not cleaned.startswith("0"):
+        cleaned = "0" + cleaned
+    # Ensure 11 digits for UK numbers
+    if len(cleaned) == 10:  # Missing leading 0
+        cleaned = "0" + cleaned
+    return cleaned
 
 
 async def whatsapp_message(function_name, tool_call_id, arguments, llm, context, result_callback):
     """
     Send a WhatsApp message to notify staff about a booking that needs a driver.
-    Fetches fresh booking data from Airtable and includes any changed details inline.
+    Compares initial booking details with fresh Airtable data to show changes.
     """
     try:
         # Log the received context
         logger.debug(f"Received context in whatsapp_message: {context}")
+
+        # Get initial details from the LLM context messages
+        initial_details = None
+        if llm and hasattr(llm, "context") and hasattr(llm.context, "messages"):
+            for message in reversed(llm.context.messages):
+                if message.get("role") == "function" and message.get("name") == "find_booking":
+                    try:
+                        result = json.loads(message.get("content", "{}"))
+                        if result.get("success"):
+                            initial_details = result.get("result", {})
+                            logger.debug(f"Found initial details: {initial_details}")
+                            break
+                    except json.JSONDecodeError:
+                        logger.warning("Failed to parse find_booking result")
 
         # Validate required arguments
         if not arguments.get("registration") or "is_drop_off" not in arguments:
@@ -100,7 +124,16 @@ async def whatsapp_message(function_name, tool_call_id, arguments, llm, context,
                     await result_callback(create_response(True, msg, {"is_drop_off": is_drop_off}))
                     return
 
-                # Extract booking details
+                # For drop-offs, check if ETA exists
+                if is_drop_off:
+                    estimated_eta = record.get("Current_ETA")
+                    if not estimated_eta or estimated_eta == "N/A":
+                        error_msg = "ETA is required for drop-offs. Please update the ETA before requesting a driver."
+                        logger.warning(error_msg)
+                        await result_callback(create_response(False, error_msg))
+                        return
+
+                # Extract booking details from fresh lookup
                 booking_ref = record.get("Booking_Ref", "N/A")
                 vehicle_make = record.get("Vehicle_Make", "N/A")
                 name = record.get("Name", "N/A")
@@ -118,49 +151,72 @@ async def whatsapp_message(function_name, tool_call_id, arguments, llm, context,
                 if estimated_eta != "Customer has collected luggage":
                     display_eta = format_date_for_display(estimated_eta)
 
-                # Check for old phone number in context
-                if context and isinstance(context, dict):
-                    old_phone = context.get("oldPhoneNumber")
-                    new_phone = context.get("updatedPhoneNumber")
-                    logger.debug(f"Phone number comparison - Old: {old_phone}, New: {new_phone}")
-
-                    # Clean phone numbers for comparison
-                    clean_old = clean_phone_number(old_phone)
-                    clean_new = clean_phone_number(new_phone)
-
-                    if clean_old and clean_new and clean_old != clean_new:
-                        contact_text = f"{new_phone} (Changed from {old_phone} to {new_phone})"
-                        logger.debug(f"Updated contact_text with change message: {contact_text}")
-                    else:
-                        logger.debug(
-                            f"Phone numbers are the same after cleaning: {clean_old} = {clean_new}"
+                # Compare with initial details if available
+                changes = []
+                if initial_details:
+                    # Compare phone numbers
+                    initial_phone = initial_details.get("contactNumber")
+                    if initial_phone and initial_phone != contact_number:
+                        changes.append(
+                            f"Phone number changed from {initial_phone} to {contact_number}"
                         )
 
-                # Check for old terminal in context
+                    # Compare vehicle details
+                    initial_vehicle = initial_details.get("vehicleMake")
+                    if initial_vehicle and initial_vehicle != vehicle_make:
+                        changes.append(
+                            f"Vehicle details changed from {initial_vehicle} to {vehicle_make}"
+                        )
+
+                    # Compare terminal
+                    initial_terminal = initial_details.get("terminal")
+                    if initial_terminal and initial_terminal != terminal:
+                        changes.append(f"Terminal changed from {initial_terminal} to {terminal}")
+                        changes.append(
+                            f"Car park changed from {initial_details.get('allocatedCarPark', 'N/A')} to {allocated_car_park}"
+                        )
+
+                # Check for updates in context (these override both initial and fresh details)
                 if context and isinstance(context, dict):
+                    # Handle phone number update
+                    old_phone = context.get("oldPhoneNumber")
+                    new_phone = context.get("updatedPhoneNumber")
+                    if old_phone and new_phone and old_phone != new_phone:
+                        contact_text = new_phone
+                        changes = [c for c in changes if not c.startswith("Phone number changed")]
+                        changes.append(f"Phone number changed from {old_phone} to {new_phone}")
+
+                    # Handle terminal update
                     old_terminal = context.get("oldTerminal")
                     new_terminal = context.get("updatedTerminal")
-                    logger.debug(f"Terminal comparison - Old: {old_terminal}, New: {new_terminal}")
-
                     if old_terminal and new_terminal and old_terminal != new_terminal:
-                        terminal = f"{new_terminal} (Changed from {old_terminal} to {new_terminal})"
-                        logger.debug(f"Updated terminal with change message: {terminal}")
+                        terminal = new_terminal
+                        changes = [c for c in changes if not c.startswith("Terminal changed")]
+                        changes.append(f"Terminal changed from {old_terminal} to {new_terminal}")
+                        # Add car park change when terminal changes
+                        old_car_park = (
+                            initial_details.get("allocatedCarPark") if initial_details else "N/A"
+                        )
+                        changes = [c for c in changes if not c.startswith("Car park changed")]
+                        changes.append(
+                            f"Car park changed from {old_car_park} to {allocated_car_park}"
+                        )
 
-                # Check for old vehicle details in context
-                if context and isinstance(context, dict):
+                    # Handle vehicle details update
                     old_vehicle_make = context.get("oldVehicleMake")
                     new_vehicle_make = context.get("updatedVehicleMake")
-                    logger.debug(
-                        f"Vehicle details comparison - Old: {old_vehicle_make}, New: {new_vehicle_make}"
-                    )
-
                     if (
                         old_vehicle_make
                         and new_vehicle_make
                         and old_vehicle_make != new_vehicle_make
                     ):
-                        vehicle_make = f"{new_vehicle_make} (Changed from {old_vehicle_make} to {new_vehicle_make})"
-                        logger.debug(f"Updated vehicle details with change message: {vehicle_make}")
+                        vehicle_make = new_vehicle_make
+                        changes = [
+                            c for c in changes if not c.startswith("Vehicle details changed")
+                        ]
+                        changes.append(
+                            f"Vehicle details changed from {old_vehicle_make} to {new_vehicle_make}"
+                        )
 
                 booking_type = "Car Drop-off" if is_drop_off else "Car Collection"
                 message = f"""
@@ -169,13 +225,19 @@ New Booking - {booking_type}:
 - Vehicle: {vehicle_make} ({registration_text})
 - Customer Name: {name}
 - Contact Number: {contact_text}
-- {"Drop-off" if is_drop_off else "Collection"} Date/Time: {display_entry_time}
+- {"Drop-off" if is_drop_off else "Collection"} Date & Time: {display_entry_time}
 - Estimated {"Drop-off" if is_drop_off else "Arrival"} Time: {display_eta}
 - Terminal: {terminal}
 - Allocated Car Park: {allocated_car_park}
-
-Action Required: Please assign a driver for this {"drop-off" if is_drop_off else "collection"}.
 """
+
+                # Add changes section if there are any changes
+                if changes:
+                    message += "\nChanges Detected:\n"
+                    for change in changes:
+                        message += f"- {change}\n"
+
+                message += f"\nAction Required: Please assign a driver for this {'drop-off' if is_drop_off else 'collection'}."
 
                 logger.debug(f"WhatsApp message content: {message}")
 
@@ -293,7 +355,7 @@ Booking Extension Required:
 - Vehicle: {booking_details.get('vehicleMake', 'N/A')} ({registration_display})
 - Customer Name: {booking_details.get('customerName', 'N/A')}
 - Contact Number: {contact_display}
-- Original End Date/Time: {end_date}
+- Original End Date & Time: {end_date}
 - Terminal: {booking_details.get('terminal', 'N/A')}
 - Allocated Car Park: {booking_details.get('allocatedCarPark', 'N/A')}
 
