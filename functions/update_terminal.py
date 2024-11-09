@@ -1,33 +1,20 @@
-import os
+import json
 import pytz
-import aiohttp
 from datetime import datetime
 from loguru import logger
-from .utils import create_response, format_registration
+import aiohttp
 from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
+from .utils import create_response, format_registration
 
 
 async def update_terminal(function_name, tool_call_id, arguments, llm, context, result_callback):
     registration = arguments.get("registration")
     terminal = arguments.get("terminal")
 
-    if not terminal:
-        await result_callback(create_response(False, "Terminal cannot be empty"))
-        return
-
-    formatted_terminal = terminal.strip()
-    if not formatted_terminal.lower().startswith("terminal"):
-        formatted_terminal = f"Terminal {formatted_terminal}"
-    formatted_terminal = formatted_terminal.title()
-
-    if formatted_terminal not in ["Terminal 1", "Terminal 2", "Terminal 3"]:
-        await result_callback(create_response(False, f"Invalid terminal: {formatted_terminal}"))
-        return
-
     timezone = pytz.timezone("Europe/London")
     current_time = datetime.now(timezone)
     logger.debug(
-        f"Updating terminal for registration: {registration}, new terminal: {formatted_terminal}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
+        f"Updating terminal for registration: {registration}, new terminal: {terminal}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
     formatted_registration = format_registration(registration)
@@ -58,11 +45,8 @@ async def update_terminal(function_name, tool_call_id, arguments, llm, context, 
                     record_id = record["id"]
                     current_terminal = record["fields"].get("Terminal")
 
-                    # Only mark as changed if the terminal is actually different
-                    fields = {"Terminal": formatted_terminal}
-                    if current_terminal and current_terminal != formatted_terminal:
-                        fields["Terminal_Changed"] = True
-                        fields["Old_Terminal"] = current_terminal
+                    # Store both old and new terminals for comparison
+                    fields = {"Terminal": terminal}
 
                     patch_url = (
                         f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}"
@@ -78,16 +62,19 @@ async def update_terminal(function_name, tool_call_id, arguments, llm, context, 
                         if patch_response.status == 200:
                             patch_data = await patch_response.json()
                             logger.info(f"Terminal updated successfully. New terminal: {terminal}")
-                            await result_callback(
-                                create_response(
-                                    True,
-                                    "Terminal updated successfully.",
-                                    {
-                                        "updatedRecord": patch_data["records"][0],
-                                        "updatedTerminal": terminal,
-                                    },
-                                )
+                            # Return both old and new terminals
+                            response = create_response(
+                                True,
+                                "Terminal updated successfully.",
+                                {
+                                    "oldTerminal": current_terminal,
+                                    "updatedTerminal": terminal,
+                                    "updatedRecord": patch_data["records"][0],
+                                },
                             )
+                            logger.debug(f"Response data: {response}")
+                            await result_callback(response)
+                            return response
                         else:
                             error_text = await patch_response.text()
                             logger.error(f"Error updating terminal: {error_text}")

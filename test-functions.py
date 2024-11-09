@@ -22,6 +22,7 @@ from functions import (
     update_eta,
     handle_get_current_time,
     handle_get_current_date,
+    update_vehicle_details,
 )
 from functions.find_booking_by_ref import find_booking_by_ref  # Import the function directly
 from functions.airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
@@ -67,8 +68,8 @@ async def reset_driver_status():
                             {
                                 "id": record_id,
                                 "fields": {
-                                    "Drop_Off_Status": "Pending",
-                                    "Collection_Status": "Pending",
+                                    "Drop_Off_Status": "",
+                                    "Collection_Status": "",
                                 },
                             }
                         ],
@@ -79,7 +80,7 @@ async def reset_driver_status():
                         patch_url, headers=headers, json=patch_data
                     ) as patch_response:
                         if patch_response.status == 200:
-                            print("Reset driver status to Pending")
+                            print("Reset driver status to Empty")
                         else:
                             print(f"Failed to reset status: {await patch_response.text()}")
 
@@ -87,7 +88,7 @@ async def reset_driver_status():
 # Test functions
 async def test_update_terminal():
     print("\nTesting update_terminal function:")
-    await update_terminal(
+    result = await update_terminal(
         "update_terminal",
         "test_id",
         {"registration": "BF11KKG", "terminal": "Terminal 2"},
@@ -95,6 +96,7 @@ async def test_update_terminal():
         mock_context,
         result_callback,
     )
+    return result
 
 
 async def test_update_registration():
@@ -114,7 +116,7 @@ async def test_update_phone_number():
     result = await update_phone_number(
         "update_phone_number",
         "test_id",
-        {"registration": "BF11KKG", "phone_number": "07421117301"},
+        {"registration": "BF11KKG", "phone_number": "07421007301"},
         mock_llm,
         mock_context,
         result_callback,
@@ -139,7 +141,7 @@ async def test_whatsapp_message(context=None):
     await whatsapp_message(
         "whatsapp_message",
         "test_id",
-        {"registration": "BF11KKG", "is_drop_off": True},
+        {"registration": "BF11KKG", "is_drop_off": False},
         mock_llm,
         context,
         result_callback,
@@ -271,13 +273,52 @@ async def test_find_booking_by_ref():
     )
 
 
+async def test_update_vehicle_details():
+    print("\nTesting update_vehicle_details function:")
+    result = await update_vehicle_details(
+        "update_vehicle_details",
+        "test_id",
+        {"registration": "BF11KKG", "vehicle_make": "Toyota Corolla Verso Black"},
+        mock_llm,
+        mock_context,
+        result_callback,
+    )
+    return result
+
+
 # Main function to run all tests
 async def run_tests():
     print("\nStep 1: Resetting driver status")
     await reset_driver_status()
 
-    print("\nStep 2: Updating phone number")
-    result = await test_update_phone_number()
+    # print("\nStep 2: Updating phone number")
+    # result = await test_update_phone_number()
+
+    # Extract context from the result
+    # context = None
+    # if isinstance(result, str):
+    #     try:
+    #         parsed_result = json.loads(result)
+    #         print(f"\nParsed result: {parsed_result}")
+
+    #         # Phone numbers are in the root level
+    #         old_phone = parsed_result.get("oldPhoneNumber")
+    #         new_phone = parsed_result.get("updatedPhoneNumber")
+
+    #         if old_phone and new_phone:
+    #             context = {"oldPhoneNumber": old_phone, "updatedPhoneNumber": new_phone}
+    #             print(f"\nContext for WhatsApp message: {context}")
+    #             print(f"Old phone: {old_phone}")
+    #             print(f"New phone: {new_phone}")
+    #     except Exception as e:
+    #         print(f"Error parsing result: {e}")
+    #         print(f"Raw result: {result}")
+
+    # print("\nStep 3: Testing WhatsApp message to see the change")
+    # await test_whatsapp_message(context)
+
+    print("\nStep 4: Updating terminal")
+    result = await test_update_terminal()
 
     # Extract context from the result
     context = None
@@ -286,21 +327,56 @@ async def run_tests():
             parsed_result = json.loads(result)
             print(f"\nParsed result: {parsed_result}")
 
-            # Phone numbers are in the root level
-            old_phone = parsed_result.get("oldPhoneNumber")
-            new_phone = parsed_result.get("updatedPhoneNumber")
+            # Terminal details are in the root level
+            old_terminal = parsed_result.get("oldTerminal")
+            new_terminal = parsed_result.get("updatedTerminal")
 
-            if old_phone and new_phone:
-                context = {"oldPhoneNumber": old_phone, "updatedPhoneNumber": new_phone}
+            if old_terminal and new_terminal:
+                context = {"oldTerminal": old_terminal, "updatedTerminal": new_terminal}
                 print(f"\nContext for WhatsApp message: {context}")
-                print(f"Old phone: {old_phone}")
-                print(f"New phone: {new_phone}")
+                print(f"Old terminal: {old_terminal}")
+                print(f"New terminal: {new_terminal}")
         except Exception as e:
             print(f"Error parsing result: {e}")
             print(f"Raw result: {result}")
 
-    print("\nStep 3: Testing WhatsApp message to see the change")
+    print("\nStep 5: Testing WhatsApp message to see the change")
     await test_whatsapp_message(context)
+
+    # print("\nStep 6: Updating vehicle details")
+    # result = await test_update_vehicle_details()
+
+    # # Extract context from the result
+    # context = None
+    # if isinstance(result, str):
+    #     try:
+    #         parsed_result = json.loads(result)
+    #         print(f"\nParsed result: {parsed_result}")
+
+    #         # Vehicle details are in the root level
+    #         old_vehicle_make = parsed_result.get("oldVehicleMake")
+    #         old_vehicle_model = parsed_result.get("oldVehicleModel")
+    #         new_vehicle_make = parsed_result.get("updatedVehicleMake")
+    #         new_vehicle_model = parsed_result.get("updatedVehicleModel")
+
+    #         if old_vehicle_make and old_vehicle_model and new_vehicle_make and new_vehicle_model:
+    #             context = {
+    #                 "oldVehicleMake": old_vehicle_make,
+    #                 "oldVehicleModel": old_vehicle_model,
+    #                 "updatedVehicleMake": new_vehicle_make,
+    #                 "updatedVehicleModel": new_vehicle_model,
+    #             }
+    #             print(f"\nContext for WhatsApp message: {context}")
+    #             print(f"Old vehicle make: {old_vehicle_make}")
+    #             print(f"Old vehicle model: {old_vehicle_model}")
+    #             print(f"New vehicle make: {new_vehicle_make}")
+    #             print(f"New vehicle model: {new_vehicle_model}")
+    #     except Exception as e:
+    #         print(f"Error parsing result: {e}")
+    #         print(f"Raw result: {result}")
+
+    # print("\nStep 7: Testing WhatsApp message to see the change")
+    # await test_whatsapp_message(context)
 
 
 # Run the tests

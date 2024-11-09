@@ -136,6 +136,32 @@ async def whatsapp_message(function_name, tool_call_id, arguments, llm, context,
                             f"Phone numbers are the same after cleaning: {clean_old} = {clean_new}"
                         )
 
+                # Check for old terminal in context
+                if context and isinstance(context, dict):
+                    old_terminal = context.get("oldTerminal")
+                    new_terminal = context.get("updatedTerminal")
+                    logger.debug(f"Terminal comparison - Old: {old_terminal}, New: {new_terminal}")
+
+                    if old_terminal and new_terminal and old_terminal != new_terminal:
+                        terminal = f"{new_terminal} (Changed from {old_terminal} to {new_terminal})"
+                        logger.debug(f"Updated terminal with change message: {terminal}")
+
+                # Check for old vehicle details in context
+                if context and isinstance(context, dict):
+                    old_vehicle_make = context.get("oldVehicleMake")
+                    new_vehicle_make = context.get("updatedVehicleMake")
+                    logger.debug(
+                        f"Vehicle details comparison - Old: {old_vehicle_make}, New: {new_vehicle_make}"
+                    )
+
+                    if (
+                        old_vehicle_make
+                        and new_vehicle_make
+                        and old_vehicle_make != new_vehicle_make
+                    ):
+                        vehicle_make = f"{new_vehicle_make} (Changed from {old_vehicle_make} to {new_vehicle_make})"
+                        logger.debug(f"Updated vehicle details with change message: {vehicle_make}")
+
                 booking_type = "Car Drop-off" if is_drop_off else "Car Collection"
                 message = f"""
 New Booking - {booking_type}:

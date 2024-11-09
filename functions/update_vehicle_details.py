@@ -11,16 +11,13 @@ async def update_vehicle_details(
     function_name, tool_call_id, arguments, llm, context, result_callback
 ):
     registration = arguments.get("registration")
-    vehicle_details = arguments.get("vehicle_details")
-
-    if not vehicle_details:
-        await result_callback(create_response(False, "Vehicle details cannot be empty"))
-        return
+    vehicle_make = arguments.get("vehicle_make")
+    vehicle_model = arguments.get("vehicle_make")  # Updated to use "vehicle_make"
 
     timezone = pytz.timezone("Europe/London")
     current_time = datetime.now(timezone)
     logger.debug(
-        f"Updating vehicle details for registration: {registration}, new details: {vehicle_details}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
+        f"Updating vehicle details for registration: {registration}, new vehicle make: {vehicle_make}, new vehicle model: {vehicle_model}, currentTime: {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
     formatted_registration = format_registration(registration)
@@ -49,13 +46,13 @@ async def update_vehicle_details(
 
                     record = data["records"][0]
                     record_id = record["id"]
-                    current_vehicle = record["fields"].get("Vehicle_Make")
+                    current_vehicle_make = record["fields"].get("Vehicle_Make")
+                    current_vehicle_model = record["fields"].get(
+                        "Vehicle_Make"
+                    )  # Updated to use "Vehicle_Make"
 
-                    # Only mark as changed if the vehicle details are actually different
-                    fields = {"Vehicle_Make": vehicle_details}
-                    if current_vehicle and current_vehicle != vehicle_details:
-                        fields["Vehicle_Changed"] = True
-                        fields["Old_Vehicle_Make"] = current_vehicle
+                    # Store both old and new vehicle details for comparison
+                    fields = {"Vehicle_Make": vehicle_make}  # Removed "Vehicle_Model"
 
                     patch_url = (
                         f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_BOOKINGS_TABLE}"
@@ -71,18 +68,23 @@ async def update_vehicle_details(
                         if patch_response.status == 200:
                             patch_data = await patch_response.json()
                             logger.info(
-                                f"Vehicle details updated successfully. New details: {vehicle_details}"
+                                f"Vehicle details updated successfully. New vehicle make: {vehicle_make}"
                             )
-                            await result_callback(
-                                create_response(
-                                    True,
-                                    "Vehicle details updated successfully.",
-                                    {
-                                        "updatedRecord": patch_data["records"][0],
-                                        "updatedVehicleDetails": vehicle_details,
-                                    },
-                                )
+                            # Return both old and new vehicle details
+                            response = create_response(
+                                True,
+                                "Vehicle details updated successfully.",
+                                {
+                                    "oldVehicleMake": current_vehicle_make,
+                                    "oldVehicleModel": current_vehicle_model,
+                                    "updatedVehicleMake": vehicle_make,
+                                    "updatedVehicleModel": vehicle_model,
+                                    "updatedRecord": patch_data["records"][0],
+                                },
                             )
+                            logger.debug(f"Response data: {response}")
+                            await result_callback(response)
+                            return response
                         else:
                             error_text = await patch_response.text()
                             logger.error(f"Error updating vehicle details: {error_text}")
