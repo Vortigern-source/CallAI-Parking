@@ -10,3 +10,4 @@ custom_pipecat/templates/streams.xml
 *.pyc
 /functions/__pycache__
 *.pyc
+*.pyc

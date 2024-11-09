@@ -17,6 +17,9 @@ COPY requirements.txt .
 RUN pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt -U
 
+# Copy the custom llm_response.py file
+COPY custom_pipecat/custom_processors/custom_aggregators/llm_response.py src/pipecat-ai/src/pipecat/processors/aggregators/llm_response.py
+
 # Copy only necessary application code
 COPY . .
 
