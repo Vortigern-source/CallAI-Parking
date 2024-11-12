@@ -14,6 +14,7 @@ from .time_utils import (
     handle_get_current_time,
     handle_get_current_date,
 )
+from .find_booking_by_ref import find_booking_by_ref
 
 __all__ = [
     # Constants
@@ -41,4 +42,7 @@ __all__ = [
     "update_eta",
     "handle_get_current_time",
     "handle_get_current_date",
+    # New functions
+    "find_booking_by_ref",
+    "hangup_call",
 ]

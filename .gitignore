@@ -11,3 +11,9 @@ custom_pipecat/templates/streams.xml
 /functions/__pycache__
 *.pyc
 *.pyc
+custom_pipecat/templates/streams.xml
+*.json
+*.js
+/web-ui/node_modules
+/functions/__pycache__
+/web-ui/node_modules

@@ -13,32 +13,13 @@ from datetime import datetime
 from openai.types.chat import ChatCompletionToolParam
 
 # Pipecat imports
-from pipecat.frames.frames import (
-    EndFrame,
-    LLMMessagesFrame,
-    Frame,
-    TranscriptionFrame,
-    TextFrame,
-    LLMFullResponseStartFrame,
-    LLMFullResponseEndFrame,
-    TTSStartedFrame,
-    TTSStoppedFrame,
-    BotStartedSpeakingFrame,
-    BotStoppedSpeakingFrame,
-    BotSpeakingFrame,
-    TTSAudioRawFrame,
-    OutputAudioRawFrame,
-)
+from pipecat.frames.frames import EndFrame, TTSSpeakFrame, EndTaskFrame, LLMMessagesFrame
 
 from pipecat.services.openai import OpenAILLMContext
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask, FrameProcessor, FrameDirection
-from pipecat.processors.aggregators.llm_response import (
-    LLMAssistantResponseAggregator,
-    LLMUserResponseAggregator,
-)
-
+from pipecat.processors.user_idle_processor import UserIdleProcessor
 from pipecat.services.openai import OpenAILLMService
 from pipecat.utils.text.markdown_text_filter import MarkdownTextFilter
 from pipecat.services.cartesia import CartesiaTTSService
@@ -53,6 +34,7 @@ from pipecat.serializers.twilio import TwilioFrameSerializer
 
 # Other imports
 from deepgram import LiveOptions
+from pipecat.audio.filters.noisereduce_filter import NoisereduceFilter
 
 # Custom processors
 from custom_pipecat.custom_processors.transcripts_processor import (
@@ -98,6 +80,7 @@ from functions import (
     handle_get_current_time,
     handle_get_current_date,
     update_vehicle_details,
+    hangup_call,
 )
 
 from functions.find_booking_by_ref import find_booking_by_ref
@@ -106,6 +89,16 @@ from functions.whatsapp_message import whatsapp_message_extension
 
 # Define custom interruption processor
 from custom_pipecat.custom_processors.interruption_processor import InterruptionFrameProcessor
+
+
+# async def hangup_call(function_name, toll_call_id, args, llm, context, result_callback):
+#     print(f"Hanging up call for client ID: {args['client_id']}")
+#     await llm.push_frame(EndTaskFrame(), FrameDirection.UPSTREAM)
+
+
+# Define Variables
+missed_response_count = 0
+idle_check_count = 0
 
 
 # Main function to run the bot
@@ -120,15 +113,15 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     add_wav_header=False,
                     vad_enabled=True,
                     vad_analyzer=SileroVADAnalyzer(
-                        params=VADParams(
-                            confidence=0.6,
-                            min_volume=0.3,
-                            stop_secs=0.3,
-                        )
+                        # params=VADParams(
+                        #     confidence=0.6,
+                        #     min_volume=0.3,
+                        #     stop_secs=0.3,
+                        # )
                     ),
                     vad_audio_passthrough=True,
                     serializer=TwilioFrameSerializer(stream_sid),
-                    # audio_in_filter=KrispFilter(),
+                    # audio_in_filter=NoisereduceFilter(),
                 ),
             )
             logger.debug(f"Transport initialized for stream_sid: {stream_sid}")
@@ -138,21 +131,72 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
 
             logger.debug("OpenAI LLM service initialized")
 
+            async def start_function_call(self, function_name, llm, context):
+                logger.info(f"!!! Starting function call: {function_name}")
+                await llm.push_frame(TTSSpeakFrame(f"Just a moment please..."))
+
+            # Define Variables
+            missed_response_count = 0
+            idle_check_count = 0
+
             # Register functions
-            llm.register_function("find_booking", find_booking)
-            llm.register_function("update_terminal", update_terminal)
-            llm.register_function("update_phone_number", update_phone_number)
-            llm.register_function("transfer_call", transfer_call)
-            llm.register_function("whatsapp_message", whatsapp_message)
-            llm.register_function("find_booking_by_phone", find_booking_by_phone)
-            llm.register_function("update_eta", update_eta)
-            llm.register_function("get_current_time", handle_get_current_time)
-            llm.register_function("get_current_date", handle_get_current_date)
-            llm.register_function("whatsapp_message_extension", whatsapp_message_extension)
-            llm.register_function("update_vehicle_details", update_vehicle_details)
             llm.register_function(
-                "find_booking_by_ref", find_booking_by_ref
-            )  # Add find_booking_by_ref registration
+                "find_booking",
+                find_booking,
+                # start_callback=find_booking.start_function_call,
+            )
+            llm.register_function(
+                "update_terminal",
+                update_terminal,
+                # start_callback=update_terminal.start_function_call,
+            )
+            llm.register_function(
+                "update_phone_number",
+                update_phone_number,
+                # start_callback=update_phone_number.start_function_call,
+            )
+            llm.register_function("transfer_call", transfer_call)
+            llm.register_function(
+                "whatsapp_message",
+                whatsapp_message,
+                # start_callback=whatsapp_message.start_function_call,
+            )
+            llm.register_function(
+                "find_booking_by_phone",
+                find_booking_by_phone,
+                # start_callback=find_booking_by_phone.start_function_call,
+            )
+            llm.register_function(
+                "update_eta",
+                update_eta,
+                # start_callback=update_eta.start_function_call,
+            )
+            llm.register_function(
+                "get_current_time",
+                handle_get_current_time,
+                # start_callback=handle_get_current_time.start_function_call,
+            )
+            llm.register_function(
+                "get_current_date",
+                handle_get_current_date,
+                # start_callback=handle_get_current_date.start_function_call,
+            )
+            llm.register_function(
+                "whatsapp_message_extension",
+                whatsapp_message_extension,
+                # start_callback=whatsapp_message_extension.start_function_call,
+            )
+            llm.register_function(
+                "update_vehicle_details",
+                update_vehicle_details,
+                # start_callback=update_vehicle_details.start_function_call,
+            )
+            llm.register_function(
+                "find_booking_by_ref",
+                find_booking_by_ref,
+                # start_callback=find_booking_by_ref.start_function_call,
+            )
+            llm.register_function("hangup_call", hangup_call)
 
             # Initialize Deepgram STT service
             stt = DeepgramSTTService(
@@ -182,7 +226,6 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             transcript_capture_processor = TranscriptCaptureProcessor()
             debugging_frame_processor = DebuggingFrameProcessor()
             bot_buffer_processor = BotBufferProcessor()
-
             interruption_frame_processor = InterruptionFrameProcessor()
 
             tools = [
@@ -400,6 +443,23 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                         },
                     },
                 ),
+                ChatCompletionToolParam(
+                    type="function",
+                    function={
+                        "name": "hangup_call",
+                        "description": "Terminate the current call",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "call_sid": {
+                                    "type": "string",
+                                    "description": "The unique identifier for the current call to be terminated",
+                                }
+                            },
+                            "required": ["call_sid"],
+                        },
+                    },
+                ),
             ]
 
             # Define initial messages for the conversation
@@ -427,9 +487,49 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             # Define the conversation pipeline
             interruption_frame_processor = InterruptionFrameProcessor()
 
+            async def short_word_callback(user_idle: UserIdleProcessor):
+                global missed_response_count, idle_check_count
+                messages = context.get_messages()
+                last_question = messages[-1] if messages else "Could you please respond?"
+
+                if missed_response_count < 3:
+                    messages.append(
+                        {
+                            "role": "system",
+                            "content": f"I didn't catch that. Could you please rephrase or repeat your response? {last_question}",
+                        }
+                    )
+                    missed_response_count += 1
+                elif idle_check_count < 2:
+                    messages.append({"role": "system", "content": "Are you still there?"})
+                    idle_check_count += 1
+                else:
+                    messages.append(
+                        {
+                            "role": "system",
+                            "content": "Goodbye. Please end the session. Use the function hangup_call to end the call.",
+                        }
+                    )
+
+                await user_idle.push_frame(LLMMessagesFrame(messages))
+
+            # async def user_idle_callback(user_idle: UserIdleProcessor):
+            #     messages.append(
+            #         {
+            #             "role": "system",
+            #             "content": "Ask the user if they are still there and try to prompt for some input, but be short.",
+            #         }
+            #     )
+            #     await user_idle.push_frame(LLMMessagesFrame(messages))
+
+            # user_idle = UserIdleProcessor(callback=user_idle_callback, timeout=5.0)
+
+            user_idle = UserIdleProcessor(callback=short_word_callback, timeout=3.0)
+
             pipeline = Pipeline(
                 [
                     transport.input(),  # Websocket input from client
+                    # user_idle,
                     stt,  # Speech-To-Text
                     # interruption_frame_processor,
                     context_aggregator.user(),  # User responses
@@ -446,7 +546,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             task = PipelineTask(
                 pipeline,
                 PipelineParams(
-                    allow_interruptions=True,
+                    # allow_interruptions=True,
                     enable_metrics=True,
                     enable_usage_metrics=True,
                     report_only_initial_ttfb=True,
@@ -480,6 +580,10 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                 # sentences_welcome_message = re.split(r"(?<=[.!?])\s+", welcome_message)
 
                 await tts.say(welcome_message)
+                # messages.append(
+                #     {"role": "system", "content": "Please introduce yourself to the user."}
+                # )
+                # await task.queue_frames([LLMMessagesFrame(messages)])
                 messages[0]["content"] += welcome_message
 
             # Define event handler for client disconnection

@@ -140,7 +140,6 @@ async def whatsapp_message(function_name, tool_call_id, arguments, llm, context,
                 contact_number = record.get("Contact_Number", "N/A")
                 entry_date_time = record.get("Entry_Date_Time", "N/A")
                 terminal = record.get("Terminal", "N/A")
-                estimated_eta = record.get("Current_ETA", "N/A")
                 allocated_car_park = record.get("Allocated_Car_Park", "N/A")
 
                 # Format fields for display
@@ -148,13 +147,17 @@ async def whatsapp_message(function_name, tool_call_id, arguments, llm, context,
                 contact_text = contact_number  # Use raw phone number without formatting
                 display_entry_time = format_date_for_display(entry_date_time)
 
-                # Handle ETA display
-                if not is_drop_off and estimated_eta == "N/A":
-                    display_eta = "Customer has collected luggage"
-                elif estimated_eta != "Customer has collected luggage":
-                    display_eta = format_date_for_display(estimated_eta)
+                # Handle ETA display based on booking type
+                if is_drop_off:
+                    estimated_eta = record.get("Current_ETA", "N/A")
+                    display_eta = (
+                        format_date_for_display(estimated_eta)
+                        if estimated_eta != "N/A"
+                        else estimated_eta
+                    )
                 else:
-                    display_eta = estimated_eta
+                    # For collections, always show "Customer has collected luggage"
+                    display_eta = "Customer has collected luggage"
 
                 # Compare with initial details if available
                 changes = []
