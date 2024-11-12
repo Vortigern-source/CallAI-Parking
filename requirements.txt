@@ -1,5 +1,5 @@
 # pipecat-ai[daily,cartesia,openai,silero,deepgram]
-git+https://github.com/pipecat-ai/pipecat.git@aleix/input-queues-block-frames#egg=pipecat-ai[daily,cartesia,openai,silero,deepgram]
+git+https://github.com/pipecat-ai/pipecat.git#egg=pipecat-ai[daily,cartesia,openai,silero,deepgram]
 fastapi
 uvicorn
 aiohttp
