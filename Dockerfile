@@ -16,17 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create necessary directories for supervisord
 RUN mkdir -p /var/log/supervisor
 
-# Copy package.json first for frontend
-COPY web-ui/package.json ./web-ui/
-
-# Install frontend dependencies
-WORKDIR /app/web-ui
-RUN npm install
-
-# Back to app root
-WORKDIR /app
-
-# Copy requirements files
+# Copy requirements files first
 COPY requirements.txt .
 COPY web-ui/backend/requirements.txt web-ui/backend/
 
@@ -41,15 +31,15 @@ COPY custom_pipecat/custom_processors/custom_aggregators/llm_response.py src/pip
 # Copy supervisord configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Copy remaining application code
-COPY . .
-
-# Build frontend
+# Copy web-ui directory and install dependencies
+COPY web-ui /app/web-ui
 WORKDIR /app/web-ui
+RUN npm install
 RUN npm run build
 
-# Back to app root
+# Copy remaining application code
 WORKDIR /app
+COPY . .
 
 # Create data directory for SQLite
 RUN mkdir -p /app/web-ui/backend/data
