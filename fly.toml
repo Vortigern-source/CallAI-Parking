@@ -1,75 +1,50 @@
-# fly.toml app configuration file for CallAI Parking Platform
-
-app = 'callgpt-parking'
-primary_region = 'iad'
-
-[experimental]
-  auto_rollback = true
+app = "callgpt-parking"
+primary_region = "iad"
 
 [build]
   dockerfile = "Dockerfile"
 
 [env]
-  FLY_APP_NAME = 'callgpt-parking'
-  ENVIRONMENT = 'production'
-  DATABASE_URL = 'postgresql://postgres:callaiparking@callgpt-parking-db.internal:5432/callaiparking'
-  PORT = '8765'
-  FAST_API_PORT = '8765'
-  # Note: Set INITIAL_ADMIN_PASSWORD and SECRET_KEY via Fly.io secrets
+  FLY_APP_NAME = "callgpt-parking"
+  ENVIRONMENT = "production"
+  DATABASE_URL = "postgresql://postgres:callaiparking@callgpt-parking-db.internal:5432/callaiparking"
+  PORT = "8765"
+  FAST_API_PORT = "8765"
+
+[experimental]
+  auto_rollback = true
 
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = 'stop'
+  auto_stop_machines = true
   auto_start_machines = true
   min_machines_running = 0
-  processes = ['app']
+  processes = ["app"]
 
 [[services]]
-  protocol = 'tcp'
-  internal_port = 8000
-  
-  [[services.ports]]
-    port = 80
-    handlers = ['http']
-    
-  [[services.ports]]
-    port = 443
-    handlers = ['http', 'tls']
+  protocol = "tcp"
+  internal_port = 8765
 
   [services.concurrency]
-    type = 'connections'
+    type = "connections"
     hard_limit = 25
     soft_limit = 20
-
-  [[services.tcp_checks]]
-    interval = '10s'
-    timeout = '2s'
-    grace_period = '30s'
-
-[[services]]
-  protocol = 'tcp'
-  internal_port = 8765
 
   [[services.ports]]
     port = 8765
-    handlers = ['tcp']
-
-  [services.concurrency]
-    type = 'connections'
-    hard_limit = 25
-    soft_limit = 20
+    handlers = ["tcp"]
 
   [[services.tcp_checks]]
-    interval = '10s'
-    timeout = '2s'
-    grace_period = '30s'
-
-[[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
-  cpus = 1
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "30s"
 
 [[metrics]]
   port = 9090
-  path = '/metrics'
+  path = "/metrics"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1gb"
