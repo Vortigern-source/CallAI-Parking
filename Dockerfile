@@ -16,7 +16,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create necessary directories for supervisord
 RUN mkdir -p /var/log/supervisor
 
-# Copy requirements files first (for better caching)
+# Copy package files first for frontend
+COPY web-ui/package.json web-ui/package-lock.json ./web-ui/
+
+# Install frontend dependencies
+WORKDIR /app/web-ui
+RUN npm install
+
+# Back to app root
+WORKDIR /app
+
+# Copy requirements files
 COPY requirements.txt .
 COPY web-ui/backend/requirements.txt web-ui/backend/
 
@@ -31,12 +41,11 @@ COPY custom_pipecat/custom_processors/custom_aggregators/llm_response.py src/pip
 # Copy supervisord configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Copy application code
+# Copy remaining application code
 COPY . .
 
-# Install frontend dependencies and build
+# Build frontend
 WORKDIR /app/web-ui
-RUN npm install
 RUN npm run build
 
 # Back to app root
