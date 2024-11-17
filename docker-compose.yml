@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  web-ui:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:callaiparking@db:5432/callaiparking
+      - SECRET_KEY=3babffad7c7bf70292c6e14c30c1f713f8c41acab62f745d9244ea680b8d6954
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - db
+    volumes:
+      - ./web-ui:/app/web-ui
+      - ./custom_pipecat:/app/custom_pipecat
+
+  db:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=callaiparking
+      - POSTGRES_PASSWORD=callaiparking
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  ai-assistant:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - web-ui
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./bot.py:/app/bot.py
+      - ./custom_pipecat:/app/custom_pipecat
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    driver: bridge
