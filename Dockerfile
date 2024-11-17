@@ -16,8 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create necessary directories for supervisord
 RUN mkdir -p /var/log/supervisor
 
-# Copy package files first for frontend
-COPY web-ui/package.json web-ui/package-lock.json ./web-ui/
+# Copy package.json first for frontend
+COPY web-ui/package.json ./web-ui/
 
 # Install frontend dependencies
 WORKDIR /app/web-ui
