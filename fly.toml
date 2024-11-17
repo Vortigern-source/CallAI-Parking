@@ -1,11 +1,11 @@
-app = "callai-parking"
+app = "callgpt-parking"
 primary_region = "lhr"
 
 [build]
   dockerfile = "Dockerfile"
 
 [env]
-  FLY_APP_NAME = "callai-parking"
+  FLY_APP_NAME = "callgpt-parking"
   ENVIRONMENT = "production"
   DATABASE_URL = "postgresql://postgres:callaiparking@callgpt-parking-db.internal:5432/callaiparking"
   PORT = "8765"
