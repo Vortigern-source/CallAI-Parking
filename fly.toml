@@ -1,11 +1,11 @@
-app = "callgpt-parking"
-primary_region = "iad"
+app = "callai-parking"
+primary_region = "lhr"
 
 [build]
   dockerfile = "Dockerfile"
 
 [env]
-  FLY_APP_NAME = "callgpt-parking"
+  FLY_APP_NAME = "callai-parking"
   ENVIRONMENT = "production"
   DATABASE_URL = "postgresql://postgres:callaiparking@callgpt-parking-db.internal:5432/callaiparking"
   PORT = "8765"
@@ -15,7 +15,9 @@ primary_region = "iad"
   auto_rollback = true
   
   [experimental.attached]
-    secrets = {}
+    postgres = [
+      { name = "callgpt-parking-db" }
+    ]
 
 [http_service]
   internal_port = 8000
@@ -24,6 +26,11 @@ primary_region = "iad"
   auto_start_machines = true
   min_machines_running = 0
   processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 20
 
 [[services]]
   protocol = "tcp"
@@ -42,11 +49,6 @@ primary_region = "iad"
     hard_limit = 25
     soft_limit = 20
 
-  [[services.tcp_checks]]
-    interval = "10s"
-    timeout = "2s"
-    grace_period = "30s"
-
 [[services]]
   protocol = "tcp"
   internal_port = 8765
@@ -60,16 +62,11 @@ primary_region = "iad"
     hard_limit = 25
     soft_limit = 20
 
-  [[services.tcp_checks]]
-    interval = "10s"
-    timeout = "2s"
-    grace_period = "30s"
-
-[[metrics]]
-  port = 9090
-  path = "/metrics"
-
 [[vm]]
   cpu_kind = "shared"
   cpus = 1
   memory = "1gb"
+
+[[metrics]]
+  port = 9090
+  path = "/metrics"

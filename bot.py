@@ -450,7 +450,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     type="function",
                     function={
                         "name": "hangup_call",
-                        "description": "Terminate the current call",
+                        "description": "End the current call. Use this when the customer goes idle or when they ask for you to end the call. Terminate the current call",
                         "parameters": {
                             "type": "object",
                             "properties": {
