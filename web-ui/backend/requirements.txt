@@ -1,9 +1,47 @@
-fastapi==0.109.0
-uvicorn==0.27.0
-pydantic==2.5.3
-python-dotenv==1.0.0
-astor==0.8.1
-aiohttp==3.9.1
-python-multipart==0.0.6
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+# Core Web Framework
+fastapi
+uvicorn
+loguru
+
+# Database and ORM
+sqlalchemy
+alembic
+psycopg2-binary
+
+# Authentication and Security
+python-jose[cryptography]
+passlib[bcrypt]>=1.7.4
+python-multipart
+python-dotenv
+
+# Password Hashing
+bcrypt==4.0.1  # Pin to a specific version that works
+setuptools  # Add this to help with version detection
+
+# Validation
+email-validator
+pydantic
+
+# Logging and Monitoring
+structlog
+
+# Development and Testing
+pytest
+httpx
+coverage
+
+# Security Extras
+cryptography
+secure
+
+# Type Hints and Utilities
+typing-extensions
+
+# HTTP Client
+aiohttp>=3.8.0
+
+# Date/Time Handling
+pytz
+
+# Environment Variables
+python-dotenv>=1.0.0

@@ -1,14 +1,45 @@
-# pipecat-ai[daily,cartesia,openai,silero,deepgram]
+# Pipecat AI Framework
 git+https://github.com/pipecat-ai/pipecat.git#egg=pipecat-ai[daily,cartesia,openai,silero,deepgram]
+#pipecat-ai[daily,cartesia,openai,silero,deepgram]==0.0.48
+# Core Web Frameworks
 fastapi
 uvicorn
+
+# AI and Communication Libraries
 aiohttp
 pytz
-python-dotenv
-twilio
 requests
+twilio
 loguru
 
+# Database and ORM
+sqlalchemy
+alembic
+psycopg2-binary
+asyncpg
 
-# git+https://github.com/pipecat-ai/pipecat.git@EdgarMMProsper:edgar/llm-user-frame-processor
-# git+https://github.com/pipecat-ai/pipecat.git@aleix/input-queues-block-frames#egg=pipecat-ai[daily,cartesia,openai,silero,deepgram]
+# Authentication and Security
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+python-dotenv
+cryptography
+secure
+bcrypt
+supervisor
+
+# External API Integrations
+airtable-python-wrapper
+
+# Validation and Type Handling
+email-validator
+pydantic
+typing-extensions
+
+# Logging and Monitoring
+structlog
+
+# Development and Testing
+pytest
+httpx
+coverage

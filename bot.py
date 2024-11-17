@@ -29,12 +29,13 @@ from pipecat.transports.network.fastapi_websocket import (
     FastAPIWebsocketTransport,
     FastAPIWebsocketParams,
 )
+from pipecat.processors.filters.stt_mute_filter import STTMuteConfig, STTMuteFilter, STTMuteStrategy
 from pipecat.audio.vad.silero import SileroVADAnalyzer, VADParams
 from pipecat.serializers.twilio import TwilioFrameSerializer
 
 # Other imports
 from deepgram import LiveOptions
-from pipecat.audio.filters.noisereduce_filter import NoisereduceFilter
+# from pipecat.audio.filters.noisereduce_filter import NoisereduceFilter
 
 # Custom processors
 from custom_pipecat.custom_processors.transcripts_processor import (
@@ -213,7 +214,9 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     vad_events=False,
                 ),
             )
-
+            stt_mute_filter = STTMuteFilter(
+                stt_service=stt, config=STTMuteConfig(strategy=STTMuteStrategy.FIRST_SPEECH)
+            )
             # Initialize Cartesia TTS service
             tts = CartesiaTTSService(
                 api_key=os.getenv("CARTESIA_API_KEY"),
@@ -529,7 +532,8 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             pipeline = Pipeline(
                 [
                     transport.input(),  # Websocket input from client
-                    # user_idle,
+                    user_idle,
+                    stt_mute_filter,
                     stt,  # Speech-To-Text
                     # interruption_frame_processor,
                     context_aggregator.user(),  # User responses
@@ -546,7 +550,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             task = PipelineTask(
                 pipeline,
                 PipelineParams(
-                    # allow_interruptions=True,
+                    allow_interruptions=True,
                     enable_metrics=True,
                     enable_usage_metrics=True,
                     report_only_initial_ttfb=True,
@@ -589,7 +593,9 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             # Define event handler for client disconnection
             @transport.event_handler("on_client_disconnected")
             async def on_client_disconnected(transport, client):
+                logger.info("Client disconnected")
                 await task.queue_frames([EndFrame()])
+
                 # Save transcript
                 transcript = transcript_capture_processor.get_transcript(bot_buffer_processor)
                 file_path = get_file_path_from_raw(
@@ -612,4 +618,4 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
         except Exception as e:
             logger.exception(f"Error in run_bot: {str(e)}")
         finally:
-            logger.info("Customer has ended call")
+            logger.info("Closing..")

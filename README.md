@@ -1,50 +1,84 @@
-# Manchester Airport Parking Call Bot
+## CallAI Parking Web Application
 
-A voice-enabled call bot for handling Manchester Airport parking reservations, built with Pipecat AI and Twilio.
+### Project Overview
+A web application for managing parking bookings with admin and user management features.
 
-## Setup
+### Database Action Tests
 
-1. Clone the repository
-2. Install dependencies:
+To verify database-related actions, run the test script:
+
 ```bash
-pip install -r requirements.txt
+python web-ui/backend/test_database_actions.py
 ```
 
-## Environment Variables
+#### Test Details
 
-Create a `.env` file in the root directory with the following variables:
+The script tests critical database operations:
+1. Initial admin user creation
+2. User authentication
+3. Adding multiple users
+4. Fetching all users
 
-```
-# OpenAI
-OPENAI_API_KEY=your_openai_api_key
+### Setup and Installation
 
-# Twilio
-TWILIO_ACCOUNT_SID=your_twilio_account_sid
-TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_PHONE_NUMBER=your_twilio_phone_number
+#### Prerequisites
+- Python 3.8+
+- Node.js and npm
+- SQLAlchemy
+- passlib
 
-# Airtable (for booking management)
-AIRTABLE_API_KEY=your_airtable_api_key
-AIRTABLE_BASE_ID=your_airtable_base_id
-AIRTABLE_TABLE_NAME=your_airtable_table_name
-
-# WhatsApp (for driver notifications)
-WHATSAPP_NUMBER=your_whatsapp_number
-```
-
-## Usage
-
-1. Start the server:
+#### Backend Setup
+1. Create a virtual environment
 ```bash
-python server.py
+python3 -m venv venv
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 ```
 
-2. The bot will be available to handle incoming calls at your configured Twilio phone number.
+2. Install dependencies
+```bash
+pip install -r web-ui/backend/requirements.txt
+```
 
-## Features
+3. Set Environment Variables
+```bash
+export INITIAL_ADMIN_USERNAME=youradmin
+export INITIAL_ADMIN_EMAIL=admin@example.com
+export INITIAL_ADMIN_PASSWORD=SecurePassword123!
+```
 
-- Handles both car drop-offs and collections
-- Manages booking lookups via registration number or booking reference
-- Updates booking details (vehicle, terminal, phone number)
-- Sends WhatsApp notifications to drivers
-- Manages expired bookings and date discrepancies
+#### Running the Application
+
+1. Start Backend Server
+```bash
+cd web-ui/backend
+uvicorn main:app --reload
+```
+
+2. Start Frontend
+```bash
+cd ../..
+npm start
+```
+
+### Testing Database Actions
+
+Run the comprehensive database test script:
+```bash
+python web-ui/backend/test_database_actions.py
+```
+
+This script will:
+- Create a test admin user
+- Authenticate the admin
+- Add two test client users
+- Fetch and display all users
+
+### Troubleshooting
+- Verify database connection settings in `database.py`
+- Check environment variables
+- Ensure all dependencies are installed
+
+### Development Notes
+- Uses SQLAlchemy for database management
+- Implements role-based access control
+- Supports user creation, authentication, and management
