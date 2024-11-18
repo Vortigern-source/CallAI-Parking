@@ -17,10 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /var/log/supervisor \
     && mkdir -p /app/web-ui/backend/data
 
-# Copy frontend files first
-COPY web-ui/package.json web-ui/package-lock.json /app/web-ui/
-COPY web-ui/public/ /app/web-ui/public/
-COPY web-ui/src/ /app/web-ui/src/
+# Copy the entire web-ui directory
+COPY web-ui /app/web-ui
 
 # Install and build frontend
 WORKDIR /app/web-ui

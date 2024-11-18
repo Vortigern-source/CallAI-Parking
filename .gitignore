@@ -1,19 +1,24 @@
-
+# Python
 *.pyc
+__pycache__
+/functions/__pycache__
+/venv
+
+# Environment
 .env
+
+# Logs and data
 /logs
 /transcripts
-/venv
-/venv
+
+# Custom templates
 custom_pipecat/templates/streams.xml
 *.xml
-*.pyc
-/functions/__pycache__
-*.pyc
-*.pyc
-custom_pipecat/templates/streams.xml
-*.json
-*.js
+
+# Node
 /web-ui/node_modules
-/functions/__pycache__
-/web-ui/node_modules
+/web-ui/build
+
+# Local files
+.DS_Store
+*.local
