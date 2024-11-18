@@ -17,22 +17,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /var/log/supervisor \
     && mkdir -p /app/web-ui/backend/data
 
-# Copy the entire project
+# Copy frontend files first
+COPY web-ui/package.json web-ui/package-lock.json /app/web-ui/
+COPY web-ui/public/ /app/web-ui/public/
+COPY web-ui/src/ /app/web-ui/src/
+
+# Install and build frontend
+WORKDIR /app/web-ui
+RUN npm install && \
+    npm run build
+
+# Copy the rest of the application
+WORKDIR /app
 COPY . .
 
 # Install Python dependencies
 RUN pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt -U \
     && pip install --no-cache-dir -r web-ui/backend/requirements.txt -U
-
-# Install frontend dependencies and build
-WORKDIR /app/web-ui
-RUN ls -la && \
-    npm install && \
-    npm run build
-
-# Return to app directory
-WORKDIR /app
 
 # Expose ports for all services
 EXPOSE 8765 8000 3000
