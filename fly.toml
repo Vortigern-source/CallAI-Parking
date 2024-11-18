@@ -53,7 +53,7 @@ primary_region = 'iad'
 
   [[services.ports]]
     port = 8765
-    handlers = ['tcp']
+    handlers = ['http']
 
   [services.concurrency]
     type = 'connections'
