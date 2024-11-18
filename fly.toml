@@ -55,7 +55,7 @@ primary_region = "lhr"
 
   [[services.ports]]
     port = 8765
-    handlers = ["tcp"]
+    handlers = ["http", "tls"]
 
   [services.concurrency]
     type = "connections"
