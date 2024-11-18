@@ -31,8 +31,15 @@ COPY custom_pipecat/custom_processors/custom_aggregators/llm_response.py src/pip
 # Copy supervisord configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Copy web-ui directory and install dependencies
-COPY web-ui /app/web-ui
+# Create web-ui directory
+RUN mkdir -p /app/web-ui
+
+# Copy frontend files explicitly
+COPY ./web-ui/package.json ./web-ui/
+COPY ./web-ui/src/ ./web-ui/src/
+COPY ./web-ui/public/ ./web-ui/public/
+
+# Install and build frontend
 WORKDIR /app/web-ui
 RUN npm install
 RUN npm run build
