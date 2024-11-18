@@ -1,72 +1,75 @@
-app = "callgpt-parking"
-primary_region = "lhr"
+# fly.toml app configuration file for CallAI Parking Platform
+
+app = 'callgpt-parking'
+primary_region = 'iad'
+
+[experimental]
+  auto_rollback = true
 
 [build]
   dockerfile = "Dockerfile"
 
 [env]
-  FLY_APP_NAME = "callgpt-parking"
-  ENVIRONMENT = "production"
-  DATABASE_URL = "postgresql://postgres:callaiparking@callgpt-parking-db.internal:5432/callaiparking"
-  PORT = "8765"
-  FAST_API_PORT = "8765"
-
-[experimental]
-  auto_rollback = true
-  
-  [experimental.attached]
-    postgres = [
-      { name = "callgpt-parking-db" }
-    ]
+  FLY_APP_NAME = 'callgpt-parking'
+  ENVIRONMENT = 'production'
+  DATABASE_URL = 'postgresql://postgres:callaiparking@callgpt-parking-db.internal:5432/callaiparking'
+  PORT = '8765'
+  FAST_API_PORT = '8765'
+  # Note: Set INITIAL_ADMIN_PASSWORD and SECRET_KEY via Fly.io secrets
 
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
-
-  [http_service.concurrency]
-    type = "connections"
-    hard_limit = 25
-    soft_limit = 20
+  processes = ['app']
 
 [[services]]
-  protocol = "tcp"
+  protocol = 'tcp'
   internal_port = 8000
-
+  
   [[services.ports]]
     port = 80
-    handlers = ["http"]
+    handlers = ['http']
     
   [[services.ports]]
     port = 443
-    handlers = ["http", "tls"]
+    handlers = ['http', 'tls']
 
   [services.concurrency]
-    type = "connections"
+    type = 'connections'
     hard_limit = 25
     soft_limit = 20
 
+  [[services.tcp_checks]]
+    interval = '10s'
+    timeout = '2s'
+    grace_period = '30s'
+
 [[services]]
-  protocol = "tcp"
+  protocol = 'tcp'
   internal_port = 8765
 
   [[services.ports]]
     port = 8765
-    handlers = ["http", "tls"]
+    handlers = ['tcp']
 
   [services.concurrency]
-    type = "connections"
+    type = 'connections'
     hard_limit = 25
     soft_limit = 20
 
+  [[services.tcp_checks]]
+    interval = '10s'
+    timeout = '2s'
+    grace_period = '30s'
+
 [[vm]]
-  cpu_kind = "shared"
+  memory = '1gb'
+  cpu_kind = 'shared'
   cpus = 1
-  memory = "1gb"
 
 [[metrics]]
   port = 9090
-  path = "/metrics"
+  path = '/metrics'
