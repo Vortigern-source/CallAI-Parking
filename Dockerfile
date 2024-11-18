@@ -17,15 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN mkdir -p /var/log/supervisor \
     && mkdir -p /app/web-ui/backend/data
 
-# Copy only package files first
-COPY web-ui/package*.json ./web-ui/
-WORKDIR /app/web-ui
-
-# Install frontend dependencies
-RUN npm ci
-
-# Return to app directory and copy everything
-WORKDIR /app
+# Copy the entire project
 COPY . .
 
 # Install Python dependencies
@@ -33,9 +25,11 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt -U \
     && pip install --no-cache-dir -r web-ui/backend/requirements.txt -U
 
-# Build frontend
+# Install frontend dependencies and build
 WORKDIR /app/web-ui
-RUN npm run build
+RUN ls -la && \
+    npm install && \
+    npm run build
 
 # Return to app directory
 WORKDIR /app
