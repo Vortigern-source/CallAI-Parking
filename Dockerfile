@@ -34,6 +34,9 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt -U \
     && pip install --no-cache-dir -r web-ui/backend/requirements.txt -U
 
+# Ensure supervisord config is in the correct location
+RUN cp /app/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
 # Expose ports for all services
 EXPOSE 8765 8000 3000
 
@@ -41,6 +44,7 @@ EXPOSE 8765 8000 3000
 ENV PORT=8765
 ENV FAST_API_PORT=8765
 ENV DATABASE_URL="sqlite:///data/parking.db"
+ENV NODE_ENV=production
 
 # Start supervisord
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
