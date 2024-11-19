@@ -39,6 +39,10 @@ WORKDIR /app/web-ui
 RUN npm install
 RUN npm run build
 
+# Create backend static directory and copy frontend build files
+RUN mkdir -p /app/web-ui/backend/static && \
+    cp -r build/* /app/web-ui/backend/static/
+
 # Back to app root
 WORKDIR /app
 
