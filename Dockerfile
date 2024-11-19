@@ -34,16 +34,18 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 # Copy application code
 COPY . .
 
+# Create necessary directories
+RUN mkdir -p /app/web-ui/backend/static
+
 # Install frontend dependencies and build
 WORKDIR /app/web-ui
 RUN npm install
 RUN npm run build
+# Copy the entire build directory to maintain structure
+RUN cp -r build/* /app/web-ui/backend/static/
 
 # Back to app root
 WORKDIR /app
-
-# Create data directory for SQLite
-RUN mkdir -p /app/web-ui/backend/data
 
 # Expose ports for all services
 EXPOSE 8765 8000 3000
