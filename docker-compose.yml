@@ -6,8 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
-      - "8000:8000"
+      - "8000:8000"  # Backend serving frontend (instead of 3000)
+      - "8765:8765"  # AI service port
     environment:
       - DATABASE_URL=postgresql://postgres:callaiparking@db:5432/callaiparking
       - SECRET_KEY=3babffad7c7bf70292c6e14c30c1f713f8c41acab62f745d9244ea680b8d6954
