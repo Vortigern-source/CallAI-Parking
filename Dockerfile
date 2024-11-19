@@ -32,20 +32,18 @@ COPY custom_pipecat/custom_processors/custom_aggregators/llm_response.py src/pip
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Copy application code
+COPY web-ui /app/web-ui/
+
+# Build frontend
+WORKDIR /app/web-ui
+RUN npm install && npm run build
+
+# Return to app directory and copy remaining files
+WORKDIR /app
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/web-ui/backend/static
-
-# Install frontend dependencies and build
-WORKDIR /app/web-ui
-RUN npm install
-RUN npm run build
-# Copy the entire build directory to maintain structure
-RUN cp -r build/* /app/web-ui/backend/static/
-
-# Back to app root
-WORKDIR /app
+# Create data directory for SQLite
+RUN mkdir -p /app/web-ui/backend/data
 
 # Expose ports for all services
 EXPOSE 8765 8000 3000
