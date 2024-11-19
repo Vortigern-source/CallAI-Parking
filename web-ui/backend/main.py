@@ -104,23 +104,67 @@ if not os.path.exists(static_dir):
         logger.error(f"Failed to create static directory: {e}")
         raise
 
-# Mount static files
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+# Function to serve static files
+async def serve_static_file(filepath: str):
+    # Check if the file exists in the static/static directory first
+    full_path = os.path.join(static_dir, "static", filepath)
+    if os.path.exists(full_path) and os.path.isfile(full_path):
+        logger.info(f"Serving file from static/static: {full_path}")
+        return FileResponse(full_path)
+
+    # If not found in static/static, check in the root static directory
+    full_path = os.path.join(static_dir, filepath)
+    if os.path.exists(full_path) and os.path.isfile(full_path):
+        logger.info(f"Serving file from static root: {full_path}")
+        return FileResponse(full_path)
+
+    logger.error(f"File not found: {filepath}")
+    logger.error(f"Tried paths:")
+    logger.error(f"1. {os.path.join(static_dir, 'static', filepath)}")
+    logger.error(f"2. {os.path.join(static_dir, filepath)}")
+    raise HTTPException(status_code=404, detail="File not found")
 
 
-# Serve index.html for all non-API routes
+# Serve static files
+@app.get("/static/{filepath:path}")
+async def serve_static(filepath: str):
+    logger.info(f"Serving static file: {filepath}")
+    return await serve_static_file(filepath)
+
+
+# Serve manifest.json
+@app.get("/manifest.json")
+async def serve_manifest():
+    manifest_path = os.path.join(static_dir, "manifest.json")
+    if os.path.exists(manifest_path):
+        return FileResponse(manifest_path)
+    return JSONResponse(content={})
+
+
+# Serve index.html for root path
+@app.get("/")
+async def serve_root():
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        logger.info("Attempting to serve index.html from: " + index_path)
+        logger.info("index.html found, serving file")
+        content = open(index_path, "r").read()
+        logger.info(f"Successfully read index.html, content length: {len(content)}")
+        return FileResponse(index_path)
+    logger.error(f"index.html not found at: {index_path}")
+    raise HTTPException(status_code=404, detail="index.html not found")
+
+
+# Serve index.html for all other non-API routes
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
+    # If the path starts with "api/", let the API router handle it
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="Not found")
 
-    index_path = os.path.join(static_dir, "index.html")
-    if os.path.exists(index_path):
-        logger.info(f"Serving index.html for path: {full_path}")
-        return FileResponse(index_path)
-    else:
-        logger.error(f"index.html not found at: {index_path}")
-        raise HTTPException(status_code=404, detail="index.html not found")
+    # For all other paths, serve index.html
+    return await serve_root()
 
 
 @app.on_event("startup")

@@ -38,12 +38,13 @@ COPY . .
 WORKDIR /app/web-ui
 RUN npm install
 RUN npm run build
-RUN ls -la build/
+RUN echo "Frontend build files:" && ls -la build/
 
-# Ensure static directory exists and copy frontend build files
+# Create backend static directory and copy frontend build files
 RUN mkdir -p /app/web-ui/backend/static && \
     cp -r build/* /app/web-ui/backend/static/ && \
-    ls -la /app/web-ui/backend/static/
+    echo "Static directory contents:" && \
+    ls -R /app/web-ui/backend/static/
 
 # Back to app root
 WORKDIR /app
@@ -59,6 +60,22 @@ ENV PORT=8765
 ENV FAST_API_PORT=8765
 ENV DATABASE_URL="sqlite:///data/parking.db"
 ENV NODE_ENV=production
+
+# Add verification step
+RUN echo "Verifying static files:" && \
+    ls -R /app/web-ui/backend/static/ && \
+    echo "Checking specific files:" && \
+    for file in \
+        "/app/web-ui/backend/static/index.html" \
+        "/app/web-ui/backend/static/asset-manifest.json" \
+        "/app/web-ui/backend/static/static/js/main.bd332e19.js"; \
+    do \
+        if [ -f "$file" ]; then \
+            echo "✓ $file exists"; \
+        else \
+            echo "✗ $file missing" && exit 1; \
+        fi \
+    done
 
 # Start supervisord
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
