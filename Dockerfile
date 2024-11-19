@@ -34,14 +34,16 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 # Copy application code
 COPY . .
 
-# Install frontend dependencies and build
+# Build frontend for production
 WORKDIR /app/web-ui
 RUN npm install
 RUN npm run build
+RUN ls -la build/
 
-# Create backend static directory and copy frontend build files
+# Ensure static directory exists and copy frontend build files
 RUN mkdir -p /app/web-ui/backend/static && \
-    cp -r build/* /app/web-ui/backend/static/
+    cp -r build/* /app/web-ui/backend/static/ && \
+    ls -la /app/web-ui/backend/static/
 
 # Back to app root
 WORKDIR /app
@@ -49,13 +51,14 @@ WORKDIR /app
 # Create data directory for SQLite
 RUN mkdir -p /app/web-ui/backend/data
 
-# Expose ports for all services
-EXPOSE 8765 8000 3000
+# Expose ports for backend services
+EXPOSE 8765 8000
 
 # Set environment variables
 ENV PORT=8765
 ENV FAST_API_PORT=8765
 ENV DATABASE_URL="sqlite:///data/parking.db"
+ENV NODE_ENV=production
 
 # Start supervisord
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

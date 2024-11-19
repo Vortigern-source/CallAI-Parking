@@ -91,73 +91,36 @@ for route in api_v1_router.routes:
 # Include API v1 router in main app
 app.include_router(api_v1_router)
 
-# Mount static files
+# Set up static files directory
 static_dir = os.path.join(current_dir, "static")
 logger.info(f"Static directory path: {static_dir}")
 
-# Log static directory contents before mounting
-if os.path.exists(static_dir):
-    logger.info("Static directory contents before mounting:")
-    for root, dirs, files in os.walk(static_dir):
-        rel_path = os.path.relpath(root, static_dir)
-        logger.info(f"Directory: {rel_path}")
-        for file in files:
-            logger.info(f"File: {os.path.join(rel_path, file)}")
-
-    # Mount static files
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    logger.info(f"Mounted static files from: {static_dir}")
-else:
-    logger.warning(f"Static directory not found at: {static_dir}")
-    # Try to create the directory
+# Ensure static directory exists
+if not os.path.exists(static_dir):
     try:
         os.makedirs(static_dir, exist_ok=True)
         logger.info(f"Created static directory at: {static_dir}")
-        app.mount("/static", StaticFiles(directory=static_dir), name="static")
     except Exception as e:
         logger.error(f"Failed to create static directory: {e}")
+        raise
+
+# Mount static files
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
-@app.get("/", include_in_schema=False)
-@app.get("/login", include_in_schema=False)
-@app.get("/dashboard", include_in_schema=False)
-@app.get("/admin/users", include_in_schema=False)
-@app.get("/settings", include_in_schema=False)
-async def serve_frontend():
+# Serve index.html for all non-API routes
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not found")
+
     index_path = os.path.join(static_dir, "index.html")
-    logger.info(f"Attempting to serve index.html from: {index_path}")
-
     if os.path.exists(index_path):
-        logger.info("index.html found, serving file")
-        try:
-            with open(index_path, "r") as f:
-                content = f.read()
-                logger.info(f"Successfully read index.html, content length: {len(content)}")
-            return FileResponse(index_path)
-        except Exception as e:
-            logger.error(f"Error reading index.html: {str(e)}")
-            return JSONResponse(
-                status_code=500, content={"message": f"Error reading index.html: {str(e)}"}
-            )
+        logger.info(f"Serving index.html for path: {full_path}")
+        return FileResponse(index_path)
     else:
         logger.error(f"index.html not found at: {index_path}")
-        # Log the contents of the static directory
-        logger.error("Static directory contents:")
-        if os.path.exists(static_dir):
-            for root, dirs, files in os.walk(static_dir):
-                rel_path = os.path.relpath(root, static_dir)
-                logger.error(f"Directory: {rel_path}")
-                for file in files:
-                    logger.error(f"File: {os.path.join(rel_path, file)}")
-        return JSONResponse(status_code=404, content={"message": "Frontend files not found"})
-
-
-@app.get("/manifest.json", include_in_schema=False)
-async def serve_manifest():
-    manifest_path = os.path.join(static_dir, "manifest.json")
-    if os.path.exists(manifest_path):
-        return FileResponse(manifest_path)
-    return JSONResponse(content={}, status_code=404)
+        raise HTTPException(status_code=404, detail="index.html not found")
 
 
 @app.on_event("startup")
