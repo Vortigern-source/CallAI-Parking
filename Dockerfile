@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create necessary directories for supervisord
 RUN mkdir -p /var/log/supervisor
 
-# Copy requirements files first (for better caching)
+# Copy requirements files first
 COPY requirements.txt .
 COPY web-ui/backend/requirements.txt web-ui/backend/
 
@@ -32,26 +32,21 @@ COPY custom_pipecat/custom_processors/custom_aggregators/llm_response.py src/pip
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Copy application code
-COPY web-ui /app/web-ui/
-
-# Build frontend
-WORKDIR /app/web-ui
-ENV NODE_ENV=production
-ENV REACT_APP_API_URL=/api/v1
-RUN npm install && \
-    npm run build && \
-    mkdir -p /app/web-ui/backend/static && \
-    cp -r build/* /app/web-ui/backend/static/
-
-# Return to app directory and copy remaining files
-WORKDIR /app
 COPY . .
+
+# Install frontend dependencies and build
+WORKDIR /app/web-ui
+RUN npm install
+RUN npm run build
+
+# Back to app root
+WORKDIR /app
 
 # Create data directory for SQLite
 RUN mkdir -p /app/web-ui/backend/data
 
-# Expose ports for services
-EXPOSE 8765 8000
+# Expose ports for all services
+EXPOSE 8765 8000 3000
 
 # Set environment variables
 ENV PORT=8765
