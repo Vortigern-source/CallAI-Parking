@@ -11,7 +11,7 @@ router = APIRouter(prefix="/bot/config", tags=["bot_config"])
 
 
 class BotConfigModel(BaseModel):
-    prompts: Dict[str, str]
+    prompts: Dict[str, Any]
     discussion: Dict[str, str]
     environment_variables: Dict[str, str]
 

@@ -5,16 +5,9 @@ import os
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 
-from twilio.rest import Client
-
-
-async def get_twilio_client(account_sid: str, auth_token: str, region: str, edge: str):
-    return Client(account_sid, auth_token, region=region, edge=edge)
-
 
 async def hangup_call(
-    call_sid: str,
-    twillio_client: Client,
+    call_sid,
     function_name,
     tool_call_id,
     args,

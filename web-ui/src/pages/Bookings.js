@@ -27,6 +27,7 @@ function Bookings() {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [terminalFilter, setTerminalFilter] = useState('');
+    const [dateFilter, setDateFilter] = useState('');
 
     useEffect(() => {
         console.log('Auth state:', { 
@@ -41,7 +42,7 @@ function Bookings() {
             setError('Not authenticated. Please log in.');
             setLoading(false);
         }
-    }, [isAuthenticated, searchTerm, statusFilter, terminalFilter]);
+    }, [isAuthenticated, searchTerm, statusFilter, terminalFilter, dateFilter]);
 
     const fetchBookings = async () => {
         try {
@@ -51,6 +52,7 @@ function Bookings() {
             if (searchTerm) params.search = searchTerm;
             if (statusFilter) params.status = statusFilter;
             if (terminalFilter) params.terminal = terminalFilter;
+            if (dateFilter) params.date_filter = dateFilter;
 
             console.log('Fetching bookings with params:', params);
 
@@ -90,6 +92,10 @@ function Bookings() {
         setTerminalFilter(event.target.value);
     };
 
+    const handleDateFilter = (event) => {
+        setDateFilter(event.target.value);
+    };
+
     const statusOptions = [
         { value: '', label: 'All Statuses' },
         { value: 'pending', label: 'Pending' },
@@ -105,6 +111,13 @@ function Bookings() {
         { value: 'T3', label: 'Terminal 3' }
     ];
 
+    const dateFilterOptions = [
+        { value: '', label: 'All Dates' },
+        { value: 'today', label: 'Today' },
+        { value: 'yesterday', label: 'Yesterday' },
+        { value: 'tomorrow', label: 'Tomorrow' }
+    ];
+
     return (
         <Container maxWidth="lg">
             <Box sx={{ my: 4 }}>
@@ -114,7 +127,7 @@ function Bookings() {
 
                 <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
                     <Grid container spacing={2}>
-                        <Grid item xs={12} sm={4}>
+                        <Grid item xs={12} sm={3}>
                             <TextField
                                 fullWidth
                                 label="Search"
@@ -124,7 +137,7 @@ function Bookings() {
                                 placeholder="Search by ref, registration, or customer"
                             />
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid item xs={12} sm={3}>
                             <TextField
                                 fullWidth
                                 select
@@ -140,7 +153,7 @@ function Bookings() {
                                 ))}
                             </TextField>
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid item xs={12} sm={3}>
                             <TextField
                                 fullWidth
                                 select
@@ -150,6 +163,22 @@ function Bookings() {
                                 onChange={handleTerminalFilter}
                             >
                                 {terminalOptions.map((option) => (
+                                    <MenuItem key={option.value} value={option.value}>
+                                        {option.label}
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                            <TextField
+                                fullWidth
+                                select
+                                label="Date Filter"
+                                variant="outlined"
+                                value={dateFilter}
+                                onChange={handleDateFilter}
+                            >
+                                {dateFilterOptions.map((option) => (
                                     <MenuItem key={option.value} value={option.value}>
                                         {option.label}
                                     </MenuItem>

@@ -15,19 +15,23 @@ import {
   Box
 } from '@mui/material';
 import { api } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 function Dashboard() {
   const [dashboardStats, setDashboardStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { token, isAuthenticated } = useAuth();
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
       try {
         setIsLoading(true);
-        const response = await api.getDashboardStats();
-        setDashboardStats(response);
-        setError(null);
+        if (token) {
+          const response = await api.getDashboardStats(token);
+          setDashboardStats(response);
+          setError(null);
+        }
       } catch (error) {
         console.error('Failed to fetch dashboard statistics:', error);
         setError(error.message || 'Failed to load dashboard statistics');
@@ -37,13 +41,27 @@ function Dashboard() {
       }
     };
 
-    fetchDashboardStats();
-  }, []);
+    if (isAuthenticated) {
+      fetchDashboardStats();
+    } else {
+      setIsLoading(false);
+    }
+  }, [token, isAuthenticated]);
 
   if (isLoading) {
     return (
       <Container maxWidth="md" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />
+      </Container>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Container maxWidth="md">
+        <Alert severity="error">
+          You must be logged in to view dashboard statistics
+        </Alert>
       </Container>
     );
   }

@@ -9,14 +9,18 @@ import {
     Grid, 
     Divider,
     Alert,
-    CircularProgress
+    CircularProgress,
+    Slider,
+    FormControl,
+    FormLabel
 } from '@mui/material';
 import { api } from '../utils/api';
 
 function BotSettings() {
     const [config, setConfig] = useState({
         prompts: {
-            assistant_prompt: ''
+            assistant_prompt: '',
+            prompt_text_rows: 10
         },
         discussion: {
             welcome_message: ''
@@ -38,7 +42,10 @@ function BotSettings() {
             
             // Ensure all sections are initialized
             const safeConfig = {
-                prompts: response.prompts || { assistant_prompt: '' },
+                prompts: {
+                    ...response.prompts,
+                    prompt_text_rows: response.prompts?.prompt_text_rows || 10
+                },
                 discussion: response.discussion || { welcome_message: '' },
                 environment_variables: response.environment_variables || {}
             };
@@ -69,6 +76,16 @@ function BotSettings() {
             environment_variables: {
                 ...prevConfig.environment_variables,
                 [key]: value
+            }
+        }));
+    };
+
+    const handlePromptTextRowsChange = (event, newValue) => {
+        setConfig(prevConfig => ({
+            ...prevConfig,
+            prompts: {
+                ...prevConfig.prompts,
+                prompt_text_rows: newValue
             }
         }));
     };
@@ -121,10 +138,22 @@ function BotSettings() {
                     <Typography variant="h6" gutterBottom>
                         Prompts
                     </Typography>
+                    <FormControl fullWidth sx={{ mb: 2 }}>
+                        <FormLabel>Prompt Text Box Size</FormLabel>
+                        <Slider
+                            value={config.prompts.prompt_text_rows}
+                            onChange={handlePromptTextRowsChange}
+                            valueLabelDisplay="auto"
+                            step={1}
+                            marks
+                            min={5}
+                            max={30}
+                        />
+                    </FormControl>
                     <TextField
                         fullWidth
                         multiline
-                        rows={10}
+                        rows={config.prompts.prompt_text_rows}
                         label="Assistant Prompt"
                         variant="outlined"
                         value={config.prompts.assistant_prompt}

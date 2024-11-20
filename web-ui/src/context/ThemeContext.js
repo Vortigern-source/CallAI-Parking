@@ -1,70 +1,54 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { api } from '../utils/api';
-import { useAuth } from './AuthContext';
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
 
-const ThemeContext = createContext();
-
-export const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-};
+const ThemeContext = createContext(null);
 
 export const CustomThemeProvider = ({ children }) => {
-  const [mode, setMode] = useState('light');
-  const { isAuthenticated, isLoading } = useAuth();
+    const [mode, setMode] = useState('light');
 
-  useEffect(() => {
-    // Only load user settings when authenticated and not loading
-    if (isAuthenticated && !isLoading) {
-      const loadUserSettings = async () => {
-        try {
-          const settings = await api.getUserSettings();
-          if (settings && settings.theme) {
-            setMode(settings.theme);
-          }
-        } catch (error) {
-          console.error('Failed to load theme settings:', error);
-          // Fallback to light theme on error
-          setMode('light');
+    const theme = createTheme({
+        palette: {
+            mode: mode,
+            primary: {
+                main: '#1976d2',
+            },
+            secondary: {
+                main: '#dc004e',
+            },
+        },
+        typography: {
+            fontFamily: 'Roboto, Arial, sans-serif',
+        },
+    });
+
+    const toggleTheme = () => {
+        setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
+    };
+
+    useEffect(() => {
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            setMode(savedTheme);
         }
-      };
+    }, []);
 
-      loadUserSettings();
+    useEffect(() => {
+        localStorage.setItem('theme', mode);
+    }, [mode]);
+
+    return (
+        <ThemeContext.Provider value={{ mode, toggleTheme }}>
+            <ThemeProvider theme={theme}>
+                {children}
+            </ThemeProvider>
+        </ThemeContext.Provider>
+    );
+};
+
+export const useTheme = () => {
+    const context = useContext(ThemeContext);
+    if (!context) {
+        throw new Error('useTheme must be used within a CustomThemeProvider');
     }
-  }, [isAuthenticated, isLoading]); // Run when authentication status or loading state changes
-
-  const theme = createTheme({
-    palette: {
-      mode,
-    },
-  });
-
-  const toggleTheme = async () => {
-    if (!isAuthenticated || isLoading) return; // Don't attempt to save if not authenticated or still loading
-
-    const newMode = mode === 'light' ? 'dark' : 'light';
-    try {
-      await api.updateUserSettings({
-        theme: newMode,
-        language: 'en',
-        notifications: true,
-        dashboard_layout: {}
-      });
-      setMode(newMode);
-    } catch (error) {
-      console.error('Failed to update theme:', error);
-    }
-  };
-
-  return (
-    <ThemeContext.Provider value={{ mode, toggleTheme }}>
-      <ThemeProvider theme={theme}>
-        {children}
-      </ThemeProvider>
-    </ThemeContext.Provider>
-  );
+    return context;
 };
