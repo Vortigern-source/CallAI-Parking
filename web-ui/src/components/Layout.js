@@ -59,7 +59,7 @@ const Layout = () => {
     { 
       text: 'Bot Settings', 
       icon: <BotIcon />, 
-      path: '/admin/bot-settings',
+      path: '/bot-settings',
       adminOnly: true
     },
     { 

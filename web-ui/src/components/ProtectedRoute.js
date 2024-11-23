@@ -1,35 +1,23 @@
-import React, { useContext } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
-import { Box, CircularProgress } from '@mui/material';
-import { AuthContext } from '../context/AuthContext';
+import React from 'react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-export default function ProtectedRoute({ children, requireAdmin }) {
-  const { isAuthenticated, role, isLoading } = useContext(AuthContext);
-  const location = useLocation();
+const ProtectedRoute = ({ children, adminOnly = false }) => {
+    const { isAuthenticated, isLoading, user } = useAuth();
 
-  if (isLoading) {
-    return (
-      <Box 
-        display="flex" 
-        justifyContent="center" 
-        alignItems="center" 
-        minHeight="100vh"
-        bgcolor="#f5f5f5"
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
+    if (isLoading) {
+        return <div>Loading...</div>; // Or a loading spinner
+    }
 
-  if (!isAuthenticated) {
-    // Redirect to login page with return url
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
+    if (!isAuthenticated) {
+        return <Navigate to="/login" replace />;
+    }
 
-  if (requireAdmin && role !== 'admin') {
-    // Redirect unauthorized users to home page
-    return <Navigate to="/" replace />;
-  }
+    if (adminOnly && user?.role !== 'admin') {
+        return <Navigate to="/dashboard" replace />;
+    }
 
-  return children;
-}
+    return children;
+};
+
+export default ProtectedRoute;
