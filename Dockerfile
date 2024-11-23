@@ -11,7 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
     npm \
     supervisor \
-    && rm -rf /var/lib/apt/lists/*
+    nginx \
+    && rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /run/nginx
 
 # Create necessary directories for supervisord
 RUN mkdir -p /var/log/supervisor
@@ -19,6 +21,17 @@ RUN mkdir -p /var/log/supervisor
 # Copy requirements files first
 COPY requirements.txt .
 COPY web-ui/backend/requirements.txt web-ui/backend/
+COPY web-ui/backend/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Create required nginx directories
+RUN mkdir -p /var/log/nginx && \
+    mkdir -p /var/lib/nginx && \
+    touch /var/log/nginx/error.log && \
+    touch /var/log/nginx/access.log
+
+# Ensure correct permissions
+RUN chown -R www-data:www-data /var/lib/nginx && \
+    chown -R www-data:www-data /var/log/nginx
 
 # Install Python dependencies
 RUN pip install --upgrade pip \
