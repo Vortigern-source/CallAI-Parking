@@ -24,14 +24,8 @@ fi
 echo "Running database migrations..."
 alembic upgrade head || echo "No migrations found or migration failed"
 
-# Start web UI backend
-echo "Starting Web UI Backend..."
-uvicorn main:app --host 0.0.0.0 --port 8000 &
-
-# Start frontend static server
-echo "Serving frontend static files..."
-cd /app/backend/frontend
-python -m http.server 3000 &
+# Start supervisord
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
 
 # Keep container alive
 echo "Keeping container alive..."
