@@ -18,23 +18,16 @@ primary_region = 'iad'
   # Note: Set INITIAL_ADMIN_PASSWORD and SECRET_KEY via Fly.io secrets
 
 [http_service]
-  internal_port = 80
+  internal_port = 8000
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
   min_machines_running = 0
   processes = ['app']
 
-  [[http_service.routes]]
-    path = "/start_call"
-    port = 8765
-
-  [[http_service.routes]]
-    path = "/ws"
-    port = 8765
-
 [[services]]
   protocol = 'tcp'
-  internal_port = 80
+  internal_port = 8000
   
   [[services.ports]]
     port = 80
@@ -43,6 +36,24 @@ primary_region = 'iad'
   [[services.ports]]
     port = 443
     handlers = ['http', 'tls']
+
+  [services.concurrency]
+    type = 'connections'
+    hard_limit = 25
+    soft_limit = 20
+
+  [[services.tcp_checks]]
+    interval = '10s'
+    timeout = '2s'
+    grace_period = '30s'
+
+[[services]]
+  protocol = 'tcp'
+  internal_port = 8765
+
+  [[services.ports]]
+    port = 8765
+    handlers = ['tls', 'http']
 
   [services.concurrency]
     type = 'connections'
