@@ -129,54 +129,19 @@ def map_airtable_to_booking(record: Dict[str, Any]) -> BookingModel:
     return BookingModel(**booking_data)
 
 
-def get_date_filter_formula(date_filter: Optional[str]) -> str:
-    """Generate Airtable filter formula for date filtering"""
-    if not date_filter:
-        return ""
-
-    # Use London timezone for consistency
-    london_tz = pytz.timezone("Europe/London")
-    today = datetime.now(london_tz).date()
-
-    if date_filter == "today":
-        start_date = today.strftime("%d/%m/%Y")
-        end_date = today.strftime("%d/%m/%Y")
-    elif date_filter == "yesterday":
-        yesterday = today - timedelta(days=1)
-        start_date = yesterday.strftime("%d/%m/%Y")
-        end_date = yesterday.strftime("%d/%m/%Y")
-    elif date_filter == "tomorrow":
-        tomorrow = today + timedelta(days=1)
-        start_date = tomorrow.strftime("%d/%m/%Y")
-        end_date = tomorrow.strftime("%d/%m/%Y")
-    else:
-        return ""
-
-    # Create a formula that checks if the entry or return date is within the specified date
-    return (
-        f"OR("
-        f'FIND("{start_date}", LEFT({{Entry_Date_Time}}, 10)), '
-        f'FIND("{start_date}", LEFT({{Return_Date_Time}}, 10))'
-        f")"
-    )
-
-
 @router.get("")
 async def get_bookings(
     current_user: User = Depends(get_current_active_user),
     status: Optional[str] = Query(None),
     terminal: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
-    date_filter: Optional[str] = Query(None),
 ):
     """
     Retrieve bookings from Airtable with optional filtering
     """
     logger.info(f"Received get_bookings request")
     logger.info(f"User: {current_user.username}")
-    logger.info(
-        f"Filters - status: {status}, terminal: {terminal}, search: {search}, date_filter: {date_filter}"
-    )
+    logger.info(f"Filters - status: {status}, terminal: {terminal}, search: {search}")
 
     # Check Airtable configuration
     if not all([AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE]):
@@ -203,11 +168,6 @@ async def get_bookings(
             f'FIND("{search}", {{Registration}}), '
             f'FIND("{search}", {{Name}}))'
         )
-
-    # Add date filter
-    date_filter_formula = get_date_filter_formula(date_filter)
-    if date_filter_formula:
-        filter_parts.append(date_filter_formula)
 
     filter_formula = ""
     if filter_parts:

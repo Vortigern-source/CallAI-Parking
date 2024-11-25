@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -22,23 +22,23 @@ export default function Functions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchFunctions = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await api.getFunctions();
-      setFunctions(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching functions:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
+    const fetchFunctions = async () => {
+      try {
+        setLoading(true);
+        const data = await api.get('/functions');
+        setFunctions(data);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching functions:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchFunctions();
-  }, [fetchFunctions]);
+  }, []);
 
   if (loading) {
     return (
@@ -85,16 +85,16 @@ export default function Functions() {
                   Parameters
                 </Typography>
                 <Paper variant="outlined" sx={{ p: 2 }}>
-                  {Object.entries(func.parameters || {}).map(([name, details]) => (
+                  {Object.entries(func.parameters).map(([name, details]) => (
                     <Box key={name} sx={{ mb: 2 }}>
                       <Typography variant="subtitle2" component="span">
                         {name}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Type: {details?.type || 'N/A'}
+                        Type: {details.type}
                       </Typography>
                       <Typography variant="body2">
-                        {details?.description || 'No description available'}
+                        {details.description}
                       </Typography>
                     </Box>
                   ))}
@@ -114,7 +114,7 @@ export default function Functions() {
                       borderRadius: 4,
                     }}
                   >
-                    {func.implementation || 'No implementation details available'}
+                    {func.implementation}
                   </SyntaxHighlighter>
                 </Paper>
               </Grid>

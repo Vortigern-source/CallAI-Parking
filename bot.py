@@ -82,7 +82,6 @@ from functions import (
     handle_get_current_date,
     update_vehicle_details,
 )
-from requests.auth import HTTPBasicAuth
 
 from functions.find_booking_by_ref import find_booking_by_ref
 
@@ -91,13 +90,15 @@ from functions.whatsapp_message import whatsapp_message_extension
 # Define custom interruption processor
 from custom_pipecat.custom_processors.interruption_processor import InterruptionFrameProcessor
 import requests
+from requests.auth import HTTPBasicAuth
+import os
+
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 
 # Define Variables
 missed_response_count = 0
 idle_check_count = 0
-
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 
 
 # Main function to run the bot
@@ -137,8 +138,14 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             # Define Variables
             missed_response_count = 0
             idle_check_count = 0
-
-            async def hangup_call(function_name, tool_call_id, args, llm, context, result_callback):
+            async def hangup_call(
+                function_name,
+                tool_call_id,
+                args,
+                llm,
+                context,
+                result_callback,
+            ):
                 url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Calls/{call_sid}.json"
                 data = {"Status": "completed"}
 
@@ -155,7 +162,6 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     print(f"Error ending call: {response.status_code} - {response.text}")
 
                 await result_callback()
-
             # Register functions
             llm.register_function(
                 "find_booking",
@@ -466,7 +472,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     type="function",
                     function={
                         "name": "hangup_call",
-                        "description": "End the current call. Use this when the customer goes idle or when they ask for you to end the call. Terminate the current call",
+                        "description": "End the current call or hangup the call. Use this when the customer goes idle or when they ask for you to end the call. Terminate the current call",
                         "parameters": {
                             "type": "object",
                             "properties": {
@@ -484,6 +490,22 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             # Define initial messages for the conversation
             messages = [{"role": "system", "content": params["prompts"]["assistant_prompt"]}]
 
+            # Add additional instruction to the system prompt
+            messages[0]["content"] += (
+                "\n\nImportant: After finding a booking, always check the 'dropOffStatus' for drop-offs or 'collectionStatus' for collections. If the relevant status is 'Driver Requested', inform the customer that a driver has already been requested for their booking. Ask if they're calling about a different booking or if there's anything else you can help with."
+            )
+            messages[0]["content"] += (
+                "\n\nImportant: Ensure you look up the booking details for the customer's registration number right after saying 'I will look up your booking details'."
+            )
+            messages[0]["content"] += (
+                "\n\nImportant: Right after you say something like 'I'll now send a message to our team to request a driver for your drop-off.' Never go silent always be pro-active. So either instantly do the function call or confirm with the customer. "
+            )
+            messages[0]["content"] += (
+                "\n\nImportant: If the lookup fails make sure to tell the customer what you looked up so they can correct you."
+            )
+            messages[0]["content"] += (
+                "\n\nImportant: WHEN CONFIRMING BOOKING DETAILS WITH CUSTOMER ALWAYS ENSURE YOU CONFIRM THE DATE AND TIME OF THE BOOKING, NOT JUST THE DATE"
+            )
             context = OpenAILLMContext(messages, tools)
             context_aggregator = llm.create_context_aggregator(context)
 
@@ -503,7 +525,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                         }
                     )
                     missed_response_count += 1
-                elif idle_check_count < 3:
+                elif idle_check_count < 2:
                     messages.append({"role": "system", "content": "Are you still there?"})
                     idle_check_count += 1
                 else:
