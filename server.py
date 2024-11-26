@@ -66,8 +66,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Start recording
     account_sid, auth_token = (
-        os.environ.get("TWILIO_ACCOUNT_SID_US"),
-        os.environ.get("TWILIO_AUTH_TOKEN_US"),
+        os.environ.get("TWILIO_ACCOUNT_SID"),
+        os.environ.get("TWILIO_AUTH_TOKEN"),
     )
     logger.info(f"Account SID: {account_sid}")
     twilio_client = TwilioClient(

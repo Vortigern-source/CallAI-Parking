@@ -1,21 +1,35 @@
 version: '3.8'
 
 services:
-  web-ui:
+  web-ui-backend:
     build: 
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.backend
     ports:
-      - "8000:8000"  # Backend serving frontend (instead of 3000)
-      - "8765:8765"  # AI service port
+      - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://postgres:callaiparking@db:5432/callaiparking
       - SECRET_KEY=3babffad7c7bf70292c6e14c30c1f713f8c41acab62f745d9244ea680b8d6954
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ALLOWED_ORIGINS=http://localhost:3000,https://callgpt-parking.fly.dev
     depends_on:
       - db
     volumes:
-      - ./web-ui:/app/web-ui
+      - ./web-ui/backend:/app/web-ui/backend
+      - ./web-ui/build:/app/web-ui/backend/static
+
+  ai-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile.ai
+    ports:
+      - "8765:8765"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FLY_APP_NAME=callgpt-parking
+    volumes:
+      - ./server.py:/app/server.py
+      - ./bot.py:/app/bot.py
       - ./custom_pipecat:/app/custom_pipecat
 
   db:
@@ -28,17 +42,18 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  ai-assistant:
+  frontend:
     build: 
-      context: .
+      context: ./web-ui
       dockerfile: Dockerfile
-    depends_on:
-      - web-ui
+    ports:
+      - "3000:3000"
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    volumes:
-      - ./bot.py:/app/bot.py
-      - ./custom_pipecat:/app/custom_pipecat
+      - REACT_APP_BACKEND_URL=http://localhost:8000
+      - REACT_APP_AI_SERVICE_URL=http://localhost:8765
+    depends_on:
+      - web-ui-backend
+      - ai-service
 
 volumes:
   postgres_data:
