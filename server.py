@@ -18,8 +18,18 @@ from bot import run_bot
 from custom_pipecat.twilio_utils.twilio_recordings import start_recording
 from twilio.rest import Client as TwilioClient
 
+# Load .env file with explicit path
+load_dotenv(dotenv_path=".env")
 
-load_dotenv()
+# Verify Twilio credentials
+account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
+
+if not account_sid or not auth_token:
+    logger.error("Twilio credentials not found in environment variables!")
+    logger.error(f"Account SID: {account_sid}")
+    logger.error(f"Auth Token: {'*' * len(auth_token) if auth_token else 'Not Set'}")
+
 app = FastAPI()
 
 app.add_middleware(
@@ -70,6 +80,12 @@ async def websocket_endpoint(websocket: WebSocket):
         os.environ.get("TWILIO_AUTH_TOKEN"),
     )
     logger.info(f"Account SID: {account_sid}")
+
+    # Add additional error checking before creating TwilioClient
+    if not account_sid or not auth_token:
+        logger.error("Cannot create Twilio client: Missing credentials")
+        raise ValueError("Twilio credentials are required")
+
     twilio_client = TwilioClient(
         account_sid, auth_token, None, None
     )  # Hardcoded, will not work if calling a Twilio phone number routed through another route

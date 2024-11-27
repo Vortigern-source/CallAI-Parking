@@ -5,6 +5,12 @@ from loguru import logger
 import aiohttp
 from .airtable_config import AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_BOOKINGS_TABLE
 from .utils import create_response, format_registration, format_date_for_display
+from custom_pipecat.custom_frames.custom_frames import TTSSpeakFrame  # Added import for TTS
+
+
+async def start_function_call(function_name, llm, context):
+    logger.info(f"!!! Starting function call: {function_name}")
+    await llm.push_frame(TTSSpeakFrame(f"Just a moment..."))
 
 
 async def find_booking(function_name, tool_call_id, arguments, llm, context, result_callback):

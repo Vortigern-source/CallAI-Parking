@@ -138,6 +138,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
             # Define Variables
             missed_response_count = 0
             idle_check_count = 0
+
             async def hangup_call(
                 function_name,
                 tool_call_id,
@@ -162,6 +163,7 @@ async def run_bot(websocket_client, stream_sid, call_sid, call_info):
                     print(f"Error ending call: {response.status_code} - {response.text}")
 
                 await result_callback()
+
             # Register functions
             llm.register_function(
                 "find_booking",

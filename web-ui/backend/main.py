@@ -159,10 +159,7 @@ async def serve_root():
 # Serve index.html for all other non-API routes
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
-    # Explicitly allow /start_call to pass through
-    if full_path == "start_call":
-        raise HTTPException(status_code=404, detail="Not found for this service")
-
+    # Remove the special blocking for start_call
     # If the path starts with "api/", let the API router handle it
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="Not found")
